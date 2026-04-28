@@ -73,6 +73,8 @@ A modern college management app built using Flutter, designed to manage events, 
   <img src="assets/images/Timetable_page.png" width="250"/>
 </p>
 
+---
+
 ### 📝 Notes
 - Structured notes section
 - Expandable content
