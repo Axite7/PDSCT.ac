@@ -1,17 +1,142 @@
-# college_app
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Axite7/PDSCT.ac/master/assets/logo.png" width="120">
+</div>
 
-A new Flutter project.
+# 🎓 PDSCT.ac (Flutter)
 
-## Getting Started
 
-This project is a starting point for a Flutter application.
+A modern college management app built using Flutter, designed to manage events, attendance, notes, profile, and timetable with a clean and premium UI.
+( Currently designed for Pt. Devprabharkar Shastri College Of Technology, Chhatarpur. )
 
-A few resources to get you started if this is your first Flutter project:
+---
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## ✨ Features
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### 🏠 Home
+- Clean dashboard UI
+- Quick navigation to modules
+- Profile access from top bar
+
+---
+
+### 📅 Events
+- Add events with poster
+- Delete events
+- Stylish event cards
+- Detailed event view with gradient UI
+
+---
+
+### 📊 Attendance
+- Interactive calendar
+- Mark attendance using:
+    - 📸 Live photo
+    - 📍 Location (in progress)
+- Sundays highlighted as holidays
+- Current day indicator
+
+---
+
+### 🕒 Timetable (NEW)
+- 📚 Lecture timetable view
+- 📝 Exam timetable support
+- Organized schedule display
+- (Future: dynamic timetable updates)
+
+---
+
+### 👤 Profile
+- Edit user details:
+    - Name
+    - Year
+    - Branch
+    - Semester
+    - Phone
+    - Email
+- Profile picture upload
+- Data stored locally (SharedPreferences)
+- Logout functionality
+
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="assets/images/Home_Page.png" width="250"/>
+  <img src="assets/images/Event_detail_page.png" width="250"/>
+  <img src="assets/images/Attendance_page.png" width="250"/>
+</p>
+
+### 📝 Notes
+- Structured notes section
+- Expandable content
+
+---
+
+## 🛠️ Tech Stack
+
+- Flutter
+- Dart
+- SharedPreferences
+- Image Picker
+- Table Calendar
+- Git & GitHub
+
+---
+
+## 🚀 Getting Started
+
+1. Clone the repository
+   git clone https://github.com/Axite7/PDSCT.ac.git
+
+
+2. Open project 
+- cd college_app
+
+
+3. Install dependencies
+- flutter pub get
+
+
+4. Run the app
+- flutter run
+
+
+
+---
+
+## ⚙️ Requirements
+
+- Flutter SDK
+- Android Studio / VS Code
+- Emulator or Physical Device
+
+---
+
+## 🔥 Future Improvements
+
+- Firebase backend integration
+- Admin panel
+- Real-time attendance tracking
+- Push notifications
+- Cloud storage for images
+- Smart timetable updates
+
+---
+
+## 👨‍💻 Developer
+
+Aditya Shukla & Dileep Rathore
+
+---
+
+## ⭐ Support
+
+If you like this project:
+
+- Star the repository
+- Share it
+- Build on top of it
+
+---
+

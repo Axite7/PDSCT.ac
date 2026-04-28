@@ -7,6 +7,7 @@ import 'package:college_app/screens/events/events_page.dart';
 import 'package:college_app/screens/notes/notes_page.dart';
 import 'package:college_app/screens/attendance/attendance_page.dart';
 import 'package:college_app/screens/auth/login_page.dart';
+import 'package:college_app/screens/timetable/timetable_page.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -209,9 +210,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
 
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Coming soon")),
+        } else if (title == "Timetable") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TimetablePage()),
           );
         }
       },

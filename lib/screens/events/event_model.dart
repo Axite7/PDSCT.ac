@@ -10,4 +10,24 @@ class Event {
     required this.desc,
     required this.image,
   });
+
+  // 🔥 TO JSON
+  Map<String, dynamic> toJson() {
+    return {
+      "title": title,
+      "date": date,
+      "desc": desc,
+      "image": image,
+    };
+  }
+
+  // 🔥 FROM JSON
+  factory Event.fromJson(Map<String, dynamic> json) {
+    return Event(
+      title: json["title"],
+      date: json["date"],
+      desc: json["desc"],
+      image: json["image"],
+    );
+  }
 }
