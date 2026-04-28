@@ -30,7 +30,7 @@ class _AddEventPageState extends State<AddEventPage> {
     }
   }
 
-  void saveEvent() {
+  void saveEvent() async {
     if (titleController.text.isEmpty ||
         dateController.text.isEmpty ||
         descController.text.isEmpty ||
@@ -42,6 +42,9 @@ class _AddEventPageState extends State<AddEventPage> {
       desc: descController.text,
       image: image!.path,
     ));
+
+    // 🔥 MAIN FIX
+    await saveEvents();
 
     Navigator.pop(context);
   }
@@ -67,7 +70,6 @@ class _AddEventPageState extends State<AddEventPage> {
 
             const SizedBox(height: 20),
 
-            // 🔥 POSTER PREVIEW
             GestureDetector(
               onTap: pickImage,
               child: Container(

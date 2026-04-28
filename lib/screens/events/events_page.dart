@@ -14,7 +14,16 @@ class EventsPage extends StatefulWidget {
 
 class _EventsPageState extends State<EventsPage> {
 
-  // 🔥 SAME HEADER FUNCTION (copied)
+  @override
+  void initState() {
+    super.initState();
+
+    // 🔥 LOAD EVENTS ON START
+    loadEvents().then((_) {
+      setState(() {});
+    });
+  }
+
   Widget buildHeader(String title) {
     return Container(
       width: double.infinity,
@@ -54,11 +63,9 @@ class _EventsPageState extends State<EventsPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6FF),
 
-      // ❌ REMOVE APPBAR
       body: Column(
         children: [
 
-          // 🔥 NEW HEADER
           buildHeader("Events"),
 
           Expanded(
@@ -94,7 +101,8 @@ class _EventsPageState extends State<EventsPage> {
                       children: [
 
                         ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
+                          borderRadius:
+                          const BorderRadius.vertical(
                               top: Radius.circular(20)),
                           child: Image.file(
                             File(event.image),
@@ -136,14 +144,19 @@ class _EventsPageState extends State<EventsPage> {
                               const SizedBox(height: 10),
 
                               Align(
-                                alignment: Alignment.centerRight,
+                                alignment:
+                                Alignment.centerRight,
                                 child: IconButton(
-                                  icon: const Icon(Icons.delete,
+                                  icon: const Icon(
+                                      Icons.delete,
                                       color: Colors.white),
-                                  onPressed: () {
+                                  onPressed: () async {
                                     setState(() {
                                       events.removeAt(index);
                                     });
+
+                                    // 🔥 SAVE AFTER DELETE
+                                    await saveEvents();
                                   },
                                 ),
                               )
@@ -168,6 +181,10 @@ class _EventsPageState extends State<EventsPage> {
             context,
             MaterialPageRoute(builder: (_) => AddEventPage()),
           );
+
+          // 🔥 REFRESH AFTER ADD
+          await loadEvents();
+
           setState(() {});
         },
       ),
