@@ -63,8 +63,14 @@ A modern college management app built using Flutter, designed to manage events, 
 
 <p align="center">
   <img src="assets/images/Home_Page.png" width="250"/>
-  <img src="assets/images/Event_detail_page.png" width="250"/>
   <img src="assets/images/Attendance_page.png" width="250"/>
+  <img src="assets/images/Event_detail_page.png" width="250"/>
+</p>
+
+<p align="center">
+  <img src="assets/images/Notes_page.png" width="250"/>
+  <img src="assets/images/Profile_page.png" width="250"/>
+  <img src="assets/images/Timetable_page.png" width="250"/>
 </p>
 
 ### 📝 Notes
