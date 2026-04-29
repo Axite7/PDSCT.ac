@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import 'dart:convert';
 
+import 'package:college_app/screens/notification/notification_page.dart';
 import 'package:college_app/screens/profile/profile_page.dart';
 import 'package:college_app/screens/events/events_page.dart';
 import 'package:college_app/screens/notes/notes_page.dart';
 import 'package:college_app/screens/attendance/attendance_page.dart';
-import 'package:college_app/screens/auth/login_page.dart';
 import 'package:college_app/screens/timetable/timetable_page.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -18,23 +19,71 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with WidgetsBindingObserver {
 
   String? imagePath;
   String username = "";
+  String displayName = "";
+  int notificationCount = 0;
 
   @override
   void initState() {
     super.initState();
-    loadProfile();
+    WidgetsBinding.instance.addObserver(this);
+
+    loadUserData();
+    loadNotificationCount();
   }
 
-  void loadProfile() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      loadNotificationCount();
+    }
+  }
+
+  Future<void> loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
 
+    String currentUser =
+        prefs.getString("currentUser") ?? widget.userName;
+
+    String? storedDisplay =
+    prefs.getString("displayName_$currentUser");
+
     setState(() {
-      username = prefs.getString("username") ?? widget.userName; // ✅ FIXED
-      imagePath = prefs.getString("profilePic");
+      username = currentUser;
+
+      displayName = (storedDisplay != null && storedDisplay.isNotEmpty)
+          ? storedDisplay
+          : currentUser;
+
+      imagePath = prefs.getString("profilePic_$currentUser");
+    });
+  }
+
+  Future<void> loadNotificationCount() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final currentUser = prefs.getString("currentUser");
+
+    if (currentUser == null || currentUser.isEmpty) return;
+
+    final data = prefs.getString("notifications_$currentUser");
+
+    List list = data != null ? jsonDecode(data) : [];
+
+    int unread = list.where((n) => n["read"] == false).length;
+
+    setState(() {
+      notificationCount = unread;
     });
   }
 
@@ -88,7 +137,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🔵 HEADER (UI SAME, only logic fixed)
   Widget topHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
@@ -112,8 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (_) => ProfilePage(username: username),
                 ),
               );
-
-              loadProfile(); // refresh after return
+              loadUserData();
             },
             child: CircleAvatar(
               radius: 30,
@@ -133,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  username, // ✅ dynamic
+                  displayName,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       color: Colors.white,
@@ -149,18 +196,48 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // 🔔 NOTIFICATION (logout hata diya)
-          iconButton(Icons.notifications, () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("No notifications")),
-            );
-          }),
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications, color: Colors.white),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationPage(),
+                    ),
+                  );
+
+                  loadNotificationCount();
+                },
+              ),
+
+              if (notificationCount > 0)
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      notificationCount > 9 ? "9+" : "$notificationCount",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  // 🔹 TITLE
   Widget sectionTitle() {
     return Container(
       alignment: Alignment.centerLeft,
@@ -184,7 +261,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🔥 CARD (unchanged)
   Widget buildCard(BuildContext context, String title, String subtitle,
       IconData icon, Color color) {
     return GestureDetector(
@@ -192,32 +268,27 @@ class _HomeScreenState extends State<HomeScreen> {
         if (title == "Events") {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => EventsPage()),
+            MaterialPageRoute(builder: (_) => const EventsPage()),
           );
-
         } else if (title == "Notes") {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => NotesPage()),
+            MaterialPageRoute(builder: (_) => const NotesPage()),
           );
-
         } else if (title == "Attendance") {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  AttendancePage(username: username), // ✅ FIXED
+              builder: (_) => AttendancePage(username: username),
             ),
           );
-
         } else if (title == "Timetable") {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => TimetablePage()),
+            MaterialPageRoute(builder: (_) => const TimetablePage()),
           );
         }
       },
-
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         padding: const EdgeInsets.all(18),
@@ -232,7 +303,6 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           ],
         ),
-
         child: Row(
           children: [
             Container(
@@ -243,9 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: Icon(icon, color: color, size: 26),
             ),
-
             const SizedBox(width: 16),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,16 +327,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
-            const Icon(Icons.arrow_forward_ios,
-                size: 16, color: Colors.grey),
           ],
         ),
       ),
     );
   }
 
-  // 🔵 BOTTOM (unchanged)
   Widget bottomBanner() {
     return ClipPath(
       clipper: BottomCurveClipper(),
@@ -306,17 +370,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  // 🔥 MISSING FUNCTION (error ka root)
-  Widget iconButton(IconData icon, VoidCallback onTap) {
-    return IconButton(
-      icon: Icon(icon, color: Colors.white),
-      onPressed: onTap,
-    );
-  }
 }
 
-// 🔵 CURVE (same)
 class BottomCurveClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:college_app/screens/notes/branch_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:college_app/screens/notes/admin_notes_page.dart';
 
 class NotesPage extends StatelessWidget {
   const NotesPage({super.key});
@@ -24,6 +26,7 @@ class NotesPage extends StatelessWidget {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
           const SizedBox(width: 5),
+
           Expanded(
             child: Text(
               title,
@@ -33,6 +36,34 @@ class NotesPage extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+          ),
+
+          // 🔥 ADMIN BUTTON
+          FutureBuilder(
+            future: SharedPreferences.getInstance(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox();
+
+              final prefs = snapshot.data!;
+              final role = prefs.getString("role") ?? "user";
+
+              if (role == "admin" || role == "root") {
+                return IconButton(
+                  icon: const Icon(Icons.admin_panel_settings,
+                      color: Colors.white),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AdminNotesPage(),
+                      ),
+                    );
+                  },
+                );
+              }
+
+              return const SizedBox();
+            },
           ),
         ],
       ),

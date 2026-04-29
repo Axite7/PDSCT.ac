@@ -11,7 +11,6 @@ class SubjectsPage extends StatelessWidget {
     required this.year,
   });
 
-  // 🔵 HEADER
   Widget buildHeader(BuildContext context, String title) {
     return Container(
       width: double.infinity,
@@ -26,18 +25,13 @@ class SubjectsPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-
-          // 🔙 BACK BUTTON
           IconButton(
             onPressed: () {
               Navigator.pop(context);
             },
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-
           const SizedBox(width: 5),
-
-          // 🔹 TITLE
           Expanded(
             child: Text(
               title,
@@ -57,7 +51,6 @@ class SubjectsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final subjects = getSubjects(branch, year);
 
-    // 🔥 SAME COLOR THEME
     final colors = [
       Colors.blue,
       Colors.green,
@@ -90,7 +83,11 @@ class SubjectsPage extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
-                            NotesListPage(subject: subjects[index]),
+                            NotesListPage(
+                              subject: subjects[index],
+                              year: year,       // ✅ FIX
+                              branch: branch,   // ✅ FIX
+                            ),
                       ),
                     );
                   },
@@ -108,11 +105,9 @@ class SubjectsPage extends StatelessWidget {
                         )
                       ],
                     ),
-
                     child: Row(
                       children: [
 
-                        // 🔹 small indicator circle
                         Container(
                           width: 10,
                           height: 10,

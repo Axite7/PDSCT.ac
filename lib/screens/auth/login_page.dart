@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 
-import 'package:college_app/screens/home/home_page.dart';
+import 'signup_page.dart';
+import '../../models/user_model.dart';
+import '../home/home_page.dart';
+import '../../models/user_role.dart';
 
 class LoginPage extends StatefulWidget {
-  LoginPage({super.key});
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -17,32 +19,84 @@ class _LoginPageState extends State<LoginPage> {
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
 
-  File? image;
+  bool obscurePassword = true;
+  bool loginAsAdmin = false;
 
-  Future pickImage() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => image = File(picked.path));
-    }
-  }
+  // ONLY CHANGE: inside login() function
 
-  Future login() async {
+  Future<void> login() async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setBool("isLoggedIn", true);
-    await prefs.setString("username", usernameController.text);
+    final username = usernameController.text.trim();
+    final password = passwordController.text.trim();
 
-    if (image != null) {
-      await prefs.setString("profilePic", image!.path);
-    } else {
-      await prefs.remove("profilePic");
+    // ROOT LOGIN
+    if (username == "Axite7" && password == "Axite@717") {
+      await prefs.setString("currentUser", username);
+      await prefs.setString("role", "root");
+
+      // ✅ FIX
+      await prefs.setBool("isLoggedIn", true);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(userName: username),
+        ),
+      );
+      return;
     }
+
+    final usersData = prefs.getStringList("users") ?? [];
+
+    final users = usersData
+        .map((e) => UserModel.fromJson(jsonDecode(e)))
+        .toList();
+
+    final user = users.where((u) =>
+    u.username == username && u.password == password);
+
+    if (user.isEmpty) {
+      _showMessage("Invalid credentials");
+      return;
+    }
+
+    String role = await UserRole.getRole(username);
+
+    if (loginAsAdmin && role == "user") {
+      await UserRole.requestAdmin(username);
+      _showMessage("Admin request sent");
+    }
+
+    await prefs.setString("currentUser", username);
+    await prefs.setString("role", role);
+
+    // ✅ FIX
+    await prefs.setBool("isLoggedIn", true);
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => HomeScreen(userName: usernameController.text),
+        builder: (_) => HomeScreen(userName: username),
       ),
+    );
+  }
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  InputDecoration _input(String hint, {Widget? suffix}) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      suffixIcon: suffix,
     );
   }
 
@@ -54,7 +108,6 @@ class _LoginPageState extends State<LoginPage> {
       body: Column(
         children: [
 
-          // 🔥 HEADER SAME STYLE
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
@@ -66,84 +119,159 @@ class _LoginPageState extends State<LoginPage> {
                 bottom: Radius.circular(40),
               ),
             ),
-            child: Column(
+            child: const Column(
               children: [
-
-                GestureDetector(
-                  onTap: pickImage,
-                  child: CircleAvatar(
-                    radius: 45,
-                    backgroundColor: Colors.white,
-                    backgroundImage:
-                    image != null ? FileImage(image!) : null,
-                    child: image == null
-                        ? const Icon(Icons.camera_alt,
-                        color: Color(0xFF4A6CF7))
-                        : null,
+                Text(
+                  "Welcome Back",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-
-                const SizedBox(height: 10),
-
-                const Text("Choose Profile Pic",
-                    style: TextStyle(color: Colors.white70)),
+                Text(
+                  "Login to continue",
+                  style: TextStyle(color: Colors.white70),
+                ),
               ],
             ),
           ),
 
-          const SizedBox(height: 30),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-
-                TextField(
-                  controller: usernameController,
-                  decoration: InputDecoration(
-                    hintText: "Username",
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
+                  TextField(
+                    controller: usernameController,
+                    decoration: _input("Username"),
                   ),
-                ),
 
-                const SizedBox(height: 15),
+                  const SizedBox(height: 15),
 
-                TextField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    hintText: "Password",
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
-                  ),
-                ),
-
-                const SizedBox(height: 25),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4A6CF7),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: obscurePassword,
+                    decoration: _input(
+                      "Password",
+                      suffix: IconButton(
+                        icon: Icon(
+                          obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            obscurePassword = !obscurePassword;
+                          });
+                        },
+                      ),
                     ),
-                    onPressed: login,
-                    child: const Text("Login",
-                        style: TextStyle(color: Colors.white)),
                   ),
-                ),
-              ],
+
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: loginAsAdmin,
+                        onChanged: (val) {
+                          setState(() => loginAsAdmin = val ?? false);
+                        },
+                      ),
+                      const Text("Login as Admin"),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4A6CF7),
+                      ),
+                      onPressed: login,
+                      child: const Text("Login",
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SignupPage(),
+                        ),
+                      );
+                    },
+                    child: const Text("Create Account"),
+                  ),
+                ],
+              ),
             ),
           ),
+
+          bottomBanner(),
         ],
       ),
     );
   }
+
+  Widget bottomBanner() {
+    return ClipPath(
+      clipper: BottomCurveClipper(),
+      child: Container(
+        width: double.infinity,
+        height: 240,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF4A6CF7), Color(0xFF6A8CFF)],
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            CircleAvatar(
+              radius: 40,
+              backgroundImage: AssetImage("assets/logo.png"),
+            ),
+            SizedBox(height: 10),
+            Text(
+              "PDSCT",
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold),
+            ),
+            Text(
+              "WELCOMES YOU",
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BottomCurveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    Path path = Path();
+    path.lineTo(0, 80);
+    path.quadraticBezierTo(size.width / 2, -30, size.width, 80);
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

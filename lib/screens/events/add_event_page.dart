@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:college_app/screens/events/event_model.dart';
 import 'package:college_app/screens/events/event_data.dart';
+import 'package:college_app/services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AddEventPage extends StatefulWidget {
   const AddEventPage({super.key});
@@ -36,15 +38,26 @@ class _AddEventPageState extends State<AddEventPage> {
         descController.text.isEmpty ||
         image == null) return;
 
+    final title = titleController.text;
+
     events.add(Event(
-      title: titleController.text,
+      title: title,
       date: dateController.text,
       desc: descController.text,
       image: image!.path,
     ));
 
-    // 🔥 MAIN FIX
     await saveEvents();
+
+    // ✅ NEW: Notification added
+    final prefs = await SharedPreferences.getInstance();
+    String currentUser = prefs.getString("currentUser") ?? "";
+
+    await NotificationService.addNotification(
+      username: "all",
+      title: "New Event Added",
+      message: "${titleController.text} event created",
+    );
 
     Navigator.pop(context);
   }

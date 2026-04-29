@@ -5,15 +5,15 @@ import 'package:college_app/screens/auth/login_page.dart';
 import 'package:college_app/screens/home/home_page.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  MyApp({super.key});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
       home: RootPage(),
     );
@@ -42,7 +42,9 @@ class _RootPageState extends State<RootPage> {
 
     setState(() {
       isLoggedIn = prefs.getBool("isLoggedIn") ?? false;
-      username = prefs.getString("username") ?? "User";
+
+      // ✅ FIX (important)
+      username = prefs.getString("currentUser") ?? "";
     });
   }
 
@@ -54,8 +56,8 @@ class _RootPageState extends State<RootPage> {
       );
     }
 
-    return isLoggedIn!
+    return isLoggedIn! && username.isNotEmpty
         ? HomeScreen(userName: username)
-        : LoginPage();
+        : const LoginPage();
   }
 }

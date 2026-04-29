@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:college_app/screens/events/event_data.dart';
 import 'package:college_app/screens/events/add_event_page.dart';
@@ -14,13 +15,24 @@ class EventsPage extends StatefulWidget {
 
 class _EventsPageState extends State<EventsPage> {
 
+  String role = "user"; // 🔥 ADDED
+
   @override
   void initState() {
     super.initState();
 
-    // 🔥 LOAD EVENTS ON START
+    loadRole(); // 🔥 ADDED
+
     loadEvents().then((_) {
       setState(() {});
+    });
+  }
+
+  // 🔥 ADDED
+  Future<void> loadRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      role = prefs.getString("role") ?? "user";
     });
   }
 
@@ -146,19 +158,26 @@ class _EventsPageState extends State<EventsPage> {
                               Align(
                                 alignment:
                                 Alignment.centerRight,
-                                child: IconButton(
+
+                                // 🔥 DELETE BUTTON HIDE FOR USER
+                                child: (role == "admin" || role == "root")
+                                    ? IconButton(
                                   icon: const Icon(
                                       Icons.delete,
                                       color: Colors.white),
                                   onPressed: () async {
+
+                                    // 🔒 SAFETY CHECK
+                                    if (role == "user") return;
+
                                     setState(() {
                                       events.removeAt(index);
                                     });
 
-                                    // 🔥 SAVE AFTER DELETE
                                     await saveEvents();
                                   },
-                                ),
+                                )
+                                    : const SizedBox(),
                               )
                             ],
                           ),
@@ -173,21 +192,27 @@ class _EventsPageState extends State<EventsPage> {
         ],
       ),
 
-      floatingActionButton: FloatingActionButton(
+      // 🔥 FAB HIDE FOR USER
+      floatingActionButton:
+      (role == "admin" || role == "root")
+          ? FloatingActionButton(
         backgroundColor: const Color(0xFF4A6CF7),
         child: const Icon(Icons.add),
         onPressed: () async {
+
+          // 🔒 SAFETY CHECK
+          if (role == "user") return;
+
           await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => AddEventPage()),
           );
 
-          // 🔥 REFRESH AFTER ADD
           await loadEvents();
-
           setState(() {});
         },
-      ),
+      )
+          : null,
     );
   }
 }
