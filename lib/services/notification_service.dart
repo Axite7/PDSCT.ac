@@ -1,85 +1,43 @@
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:college_app/services/firestore_service.dart';
 
+/// Notification service - now backed by Firestore
 class NotificationService {
 
+  /// Add notification for a specific user or all users
   static Future<void> addNotification({
-    required String username,
+    required String username, // 'all' for broadcast, or specific userId
     required String title,
     required String message,
+    String type = 'general',
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    List<String> targets = [];
-
-    if (username == "all") {
-      final users = prefs.getStringList("users") ?? [];
-
-      targets = users.map((e) {
-        final u = jsonDecode(e);
-        return u["username"].toString();
-      }).toList();
-
-      // 🔥 root add
-      if (!targets.contains("Axite7")) {
-        targets.add("Axite7");
-      }
-
+    if (username == 'all') {
+      await FirestoreService.addNotificationToAll(
+        title: title,
+        message: message,
+        type: type,
+      );
     } else {
-      // 🔥 THIS WAS MISSING (main bug)
-      targets = [username];
-    }
-
-    for (String user in targets) {
-      final key = "notifications_$user";
-
-      final data = prefs.getString(key);
-      List notifications = data != null ? jsonDecode(data) : [];
-
-      notifications.insert(0, {
-        "title": title,
-        "message": message,
-        "read": false,
-        "time": DateTime.now().toIso8601String(),
-      });
-
-      await prefs.setString(key, jsonEncode(notifications));
+      await FirestoreService.addNotification(
+        userId: username,
+        title: title,
+        message: message,
+        type: type,
+      );
     }
   }
 
-  static Future<List> getNotifications(String username) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final data = prefs.getString("notifications_$username");
-    return data != null ? jsonDecode(data) : [];
+  /// Get notifications for current user (returns stream)
+  static Stream getNotificationsStream(String userId) {
+    return FirestoreService.streamNotifications(userId);
   }
 
-  static Future<void> removeNotification(String username, int index) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final key = "notifications_$username";
-    final data = prefs.getString(key);
-
-    List notifications = data != null ? jsonDecode(data) : [];
-
-    if (index >= 0 && index < notifications.length) {
-      notifications.removeAt(index);
-      await prefs.setString(key, jsonEncode(notifications));
-    }
+  /// Mark all notifications as read
+  static Future<void> markAllRead(String userId) async {
+    await FirestoreService.markAllNotificationsRead(userId);
   }
 
-  static Future<void> markAllRead(String username) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final key = "notifications_$username";
-    final data = prefs.getString(key);
-
-    List notifications = data != null ? jsonDecode(data) : [];
-
-    for (var n in notifications) {
-      n["read"] = true;
-    }
-
-    await prefs.setString(key, jsonEncode(notifications));
+  /// Remove a notification
+  static Future<void> removeNotification(String userId, String notifId) async {
+    await FirestoreService.deleteNotification(userId, notifId);
   }
 }

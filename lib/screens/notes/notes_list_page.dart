@@ -3,10 +3,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import 'package:college_app/services/firestore_service.dart';
+import 'package:college_app/services/storage_service.dart';
 import 'package:college_app/services/notification_service.dart';
+import 'package:college_app/services/auth_service.dart';
 
 class NotesListPage extends StatefulWidget {
   final String subject;
@@ -26,15 +29,9 @@ class NotesListPage extends StatefulWidget {
 
 class _NotesListPageState extends State<NotesListPage> {
 
-  List approvedNotes = [];
   String role = "user";
-  String username = "";
-
-  List<String> dummyNotes = [
-    "Module 1 Notes.pdf",
-    "Important Questions.pdf",
-    "PYQs.pdf",
-  ];
+  String uid = "";
+  bool isUploading = false;
 
   final colors = [
     Colors.blue,
@@ -47,26 +44,17 @@ class _NotesListPageState extends State<NotesListPage> {
   @override
   void initState() {
     super.initState();
-    loadData();
+    _loadRole();
   }
 
-  Future loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final approved = prefs.getString("approvedNotes");
-    List allNotes = approved != null ? jsonDecode(approved) : [];
-
-    setState(() {
-      // 🔥 FILTER FIX (NOW CORRECT)
-      approvedNotes = allNotes.where((n) =>
-      n["subject"] == widget.subject &&
-          n["year"] == widget.year &&
-          n["branch"] == widget.branch
-      ).toList();
-
-      role = prefs.getString("role") ?? "user";
-      username = prefs.getString("currentUser") ?? "";
-    });
+  Future _loadRole() async {
+    final r = await AuthService.getUserRole();
+    if (mounted) {
+      setState(() {
+        role = r;
+        uid = AuthService.currentUid ?? '';
+      });
+    }
   }
 
   Future<void> pickPDF() async {
@@ -75,86 +63,61 @@ class _NotesListPageState extends State<NotesListPage> {
       allowedExtensions: ['pdf'],
     );
 
-    if (result != null) {
-      final prefs = await SharedPreferences.getInstance();
+    if (result != null && result.files.single.path != null) {
+      setState(() => isUploading = true);
 
-      final fileName = result.files.single.name;
-      final filePath = result.files.single.path;
+      try {
+        final file = File(result.files.single.path!);
+        final fileName = result.files.single.name;
 
-      Map note = {
-        "title": fileName,
-        "path": filePath,
-        "uploadedBy": username,
-        "subject": widget.subject,
-        "year": widget.year,
-        "branch": widget.branch,
-      };
+        // Upload to Firebase Storage
+        final fileUrl = await StorageService.uploadNotePDF(file);
 
-      if (role == "admin" || role == "root") {
-        final approvedData = prefs.getString("approvedNotes");
-        List approved =
-        approvedData != null ? jsonDecode(approvedData) : [];
+        // Determine status based on role
+        final status = (role == "admin" || role == "root")
+            ? 'approved'
+            : 'pending';
 
-        approved.add(note);
+        // Save to Firestore
+        await FirestoreService.uploadNote(
+          title: fileName,
+          fileUrl: fileUrl,
+          subject: widget.subject,
+          year: widget.year,
+          branch: widget.branch,
+          uploadedBy: uid,
+          status: status,
+        );
 
-        await prefs.setString("approvedNotes", jsonEncode(approved));
-        loadData();
-
+        if (status == 'approved') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Note added")),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Sent for approval")),
+          );
+          await NotificationService.addNotification(
+            username: uid,
+            title: "Note Submitted",
+            message: "Your ${widget.subject} notes sent for approval",
+          );
+        }
+      } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Note added")),
+          SnackBar(content: Text("Error: $e")),
         );
-        await NotificationService.addNotification(
-          username: "root", // 🔥 admin/root ko notify
-          title: "New Note Uploaded",
-          message: "$username uploaded ${widget.subject} notes",
-        );
-      } else {
-        final data = prefs.getString("pendingNotes");
-        List pending = data != null ? jsonDecode(data) : [];
-
-        pending.add(note);
-
-        await prefs.setString("pendingNotes", jsonEncode(pending));
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Sent for approval")),
-        );
-        await NotificationService.addNotification(
-          username: username, // 🔥 USER ko bhi
-          title: "Note Submitted",
-          message: "Your ${widget.subject} notes sent for approval",
-        );
+      } finally {
+        if (mounted) setState(() => isUploading = false);
       }
     }
   }
 
-  void openPDF(String path) async {
-    await OpenFilex.open(path);
-  }
-
-  Future deleteNote(int index) async {
+  Future<void> deleteNote(String noteId, String fileUrl) async {
     if (role != "admin" && role != "root") return;
 
-    final prefs = await SharedPreferences.getInstance();
-
-    final data = prefs.getString("approvedNotes");
-    List allNotes = data != null ? jsonDecode(data) : [];
-
-    allNotes.removeWhere((n) =>
-    n["title"] == approvedNotes[index]["title"] &&
-        n["path"] == approvedNotes[index]["path"]);
-
-    await prefs.setString("approvedNotes", jsonEncode(allNotes));
-
-    loadData();
-  }
-
-  void deleteDummy(int index) {
-    if (role != "admin" && role != "root") return;
-
-    setState(() {
-      dummyNotes.removeAt(index);
-    });
+    await StorageService.deleteFileByUrl(fileUrl);
+    await FirestoreService.deleteNote(noteId);
   }
 
   Widget buildHeader(String title) {
@@ -227,7 +190,7 @@ class _NotesListPageState extends State<NotesListPage> {
                 ),
               ),
             ),
-            if (role == "admin" || role == "root")
+            if ((role == "admin" || role == "root") && onDelete != null)
               IconButton(
                 icon: const Icon(Icons.delete, color: Colors.white),
                 onPressed: onDelete,
@@ -247,32 +210,55 @@ class _NotesListPageState extends State<NotesListPage> {
         children: [
           buildHeader(widget.subject),
 
+          if (isUploading)
+            const LinearProgressIndicator(),
+
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirestoreService.streamApprovedNotes(
+                subject: widget.subject,
+                year: widget.year,
+                branch: widget.branch,
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                ...List.generate(dummyNotes.length, (index) {
-                  return buildCard(
-                    title: dummyNotes[index],
-                    color: colors[index % colors.length],
-                    onDelete: () => deleteDummy(index),
+                final docs = snapshot.data?.docs ?? [];
+
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text("No notes available yet"),
                   );
-                }),
+                }
 
-                const SizedBox(height: 10),
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data();
+                    final noteId = docs[index].id;
 
-                ...List.generate(approvedNotes.length, (index) {
-                  final note = approvedNotes[index];
-
-                  return buildCard(
-                    title: note["title"],
-                    color: colors[(index + 1) % colors.length],
-                    onTap: () => openPDF(note["path"]),
-                    onDelete: () => deleteNote(index),
-                  );
-                }),
-              ],
+                    return buildCard(
+                      title: data['title'] ?? 'Untitled',
+                      color: colors[index % colors.length],
+                      onTap: () {
+                        // Open PDF URL in browser
+                        final url = data['fileUrl'] ?? '';
+                        if (url.isNotEmpty) {
+                          launchUrl(Uri.parse(url),
+                              mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      onDelete: () => deleteNote(
+                        noteId,
+                        data['fileUrl'] ?? '',
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -280,7 +266,7 @@ class _NotesListPageState extends State<NotesListPage> {
 
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF4A6CF7),
-        onPressed: pickPDF,
+        onPressed: isUploading ? null : pickPDF,
         child: const Icon(Icons.upload_file),
       ),
     );

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
-import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:college_app/screens/notification/notification_page.dart';
 import 'package:college_app/screens/profile/profile_page.dart';
@@ -9,6 +8,9 @@ import 'package:college_app/screens/events/events_page.dart';
 import 'package:college_app/screens/notes/notes_page.dart';
 import 'package:college_app/screens/attendance/attendance_page.dart';
 import 'package:college_app/screens/timetable/timetable_page.dart';
+import 'package:college_app/screens/admin/admin_panel_page.dart';
+import 'package:college_app/services/auth_service.dart';
+import 'package:college_app/services/firestore_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -22,18 +24,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with WidgetsBindingObserver {
 
-  String? imagePath;
+  String? profilePicUrl;
   String username = "";
   String displayName = "";
+  String role = "user";
   int notificationCount = 0;
+
+  String get uid => AuthService.currentUid ?? widget.userName;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    loadUserData();
-    loadNotificationCount();
   }
 
   @override
@@ -43,97 +45,75 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      loadNotificationCount();
-    }
-  }
-
-  Future<void> loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    String currentUser =
-        prefs.getString("currentUser") ?? widget.userName;
-
-    String? storedDisplay =
-    prefs.getString("displayName_$currentUser");
-
-    setState(() {
-      username = currentUser;
-
-      displayName = (storedDisplay != null && storedDisplay.isNotEmpty)
-          ? storedDisplay
-          : currentUser;
-
-      imagePath = prefs.getString("profilePic_$currentUser");
-    });
-  }
-
-  Future<void> loadNotificationCount() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final currentUser = prefs.getString("currentUser");
-
-    if (currentUser == null || currentUser.isEmpty) return;
-
-    final data = prefs.getString("notifications_$currentUser");
-
-    List list = data != null ? jsonDecode(data) : [];
-
-    int unread = list.where((n) => n["read"] == false).length;
-
-    setState(() {
-      notificationCount = unread;
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF2F4F8),
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirestoreService.streamUser(uid),
+      builder: (context, userSnapshot) {
+        if (userSnapshot.hasData && userSnapshot.data?.data() != null) {
+          final data = userSnapshot.data!.data()!;
+          displayName = data['displayName'] ?? data['username'] ?? '';
+          username = data['username'] ?? '';
+          profilePicUrl = data['profilePicUrl'];
+          role = data['role'] ?? 'user';
+        }
 
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            topHeader(context),
-            sectionTitle(),
+        return Scaffold(
+          backgroundColor: const Color(0xFFF2F4F8),
 
-            buildCard(
-              context,
-              "Events",
-              "Stay updated with all college events",
-              Icons.calendar_month,
-              Colors.blue,
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                topHeader(context),
+                sectionTitle(),
+
+                buildCard(
+                  context,
+                  "Events",
+                  "Stay updated with all college events",
+                  Icons.calendar_month,
+                  Colors.blue,
+                ),
+
+                buildCard(
+                  context,
+                  "Notes",
+                  "Access and download study materials",
+                  Icons.menu_book,
+                  Colors.orange,
+                ),
+
+                buildCard(
+                  context,
+                  "Attendance",
+                  "Mark and track your attendance",
+                  Icons.check_circle,
+                  Colors.green,
+                ),
+
+                buildCard(
+                  context,
+                  "Timetable",
+                  "View your class timetable",
+                  Icons.calendar_today,
+                  Colors.purple,
+                ),
+
+                // Admin Panel card (visible to admin/root only)
+                if (role == "admin" || role == "root")
+                  buildCard(
+                    context,
+                    "Admin Panel",
+                    "Manage users, content & analytics",
+                    Icons.admin_panel_settings,
+                    Colors.red,
+                  ),
+
+                bottomBanner(),
+              ],
             ),
-
-            buildCard(
-              context,
-              "Notes",
-              "Access and download study materials",
-              Icons.menu_book,
-              Colors.orange,
-            ),
-
-            buildCard(
-              context,
-              "Attendance",
-              "Mark and track your attendance",
-              Icons.check_circle,
-              Colors.green,
-            ),
-
-            buildCard(
-              context,
-              "Timetable",
-              "View your class timetable",
-              Icons.calendar_today,
-              Colors.purple,
-            ),
-
-            bottomBanner(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -157,17 +137,17 @@ class _HomeScreenState extends State<HomeScreen>
               await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ProfilePage(username: username),
+                  builder: (_) => ProfilePage(username: uid),
                 ),
               );
-              loadUserData();
             },
             child: CircleAvatar(
               radius: 30,
               backgroundColor: Colors.white24,
-              backgroundImage:
-              imagePath != null ? FileImage(File(imagePath!)) : null,
-              child: imagePath == null
+              backgroundImage: profilePicUrl != null
+                  ? CachedNetworkImageProvider(profilePicUrl!)
+                  : null,
+              child: profilePicUrl == null
                   ? const Icon(Icons.person, color: Colors.white)
                   : null,
             ),
@@ -189,49 +169,55 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  "Let’s make today productive ✨",
+                  "Let's make today productive ✨",
                   style: TextStyle(color: Colors.white70),
                 ),
               ],
             ),
           ),
 
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications, color: Colors.white),
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const NotificationPage(),
-                    ),
-                  );
+          // Notification bell with real-time unread count
+          StreamBuilder<QuerySnapshot>(
+            stream: FirestoreService.streamUnreadNotifications(uid),
+            builder: (context, snapshot) {
+              int unread = snapshot.data?.docs.length ?? 0;
 
-                  loadNotificationCount();
-                },
-              ),
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications, color: Colors.white),
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationPage(),
+                        ),
+                      );
+                    },
+                  ),
 
-              if (notificationCount > 0)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      notificationCount > 9 ? "9+" : "$notificationCount",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
+                  if (unread > 0)
+                    Positioned(
+                      right: 6,
+                      top: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          unread > 9 ? "9+" : "$unread",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-            ],
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -279,13 +265,18 @@ class _HomeScreenState extends State<HomeScreen>
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => AttendancePage(username: username),
+              builder: (_) => AttendancePage(username: uid),
             ),
           );
         } else if (title == "Timetable") {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const TimetablePage()),
+          );
+        } else if (title == "Admin Panel") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminPanelPage()),
           );
         }
       },

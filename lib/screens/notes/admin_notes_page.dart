@@ -1,90 +1,57 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'package:open_filex/open_filex.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../../services/notification_service.dart';
+import 'package:college_app/services/firestore_service.dart';
+import 'package:college_app/services/notification_service.dart';
+import 'package:college_app/services/storage_service.dart';
+import 'package:college_app/services/auth_service.dart';
 
-class AdminNotesPage extends StatefulWidget {
+class AdminNotesPage extends StatelessWidget {
   const AdminNotesPage({super.key});
 
   @override
-  State<AdminNotesPage> createState() => _AdminNotesPageState();
-}
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FF),
 
-class _AdminNotesPageState extends State<AdminNotesPage> {
-  List pending = [];
+      body: Column(
+        children: [
+          _buildHeader(context),
 
-  @override
-  void initState() {
-    super.initState();
-    loadData();
-  }
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirestoreService.streamPendingNotes(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-  Future<void> loadData() async {
-    final prefs = await SharedPreferences.getInstance();
+                final docs = snapshot.data?.docs ?? [];
 
-    final data = prefs.getString("pendingNotes");
-    pending = data != null ? jsonDecode(data) : [];
+                if (docs.isEmpty) {
+                  return const Center(child: Text("No pending notes"));
+                }
 
-    setState(() {});
-  }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data();
+                    final noteId = docs[index].id;
 
-  Future<void> approve(int index) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final pendingData = prefs.getString("pendingNotes");
-    List pendingList = pendingData != null ? jsonDecode(pendingData) : [];
-
-    final approvedData = prefs.getString("approvedNotes");
-    List approvedList =
-    approvedData != null ? jsonDecode(approvedData) : [];
-
-    final note = pendingList[index];
-
-    approvedList.add(note);
-    pendingList.removeAt(index);
-
-    await prefs.setString("approvedNotes", jsonEncode(approvedList));
-    await prefs.setString("pendingNotes", jsonEncode(pendingList));
-
-    // 🔥 USER NOTIFICATION
-    await NotificationService.addNotification(
-      username: note["uploadedBy"],
-      title: "Note Approved",
-      message: "${note["title"]} approved by admin",
+                    return _buildCard(context, data, noteId);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
-
-    await loadData();
   }
 
-  Future<void> reject(int index) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final pendingData = prefs.getString("pendingNotes");
-    List pendingList = pendingData != null ? jsonDecode(pendingData) : [];
-
-    final note = pendingList[index];
-
-    pendingList.removeAt(index);
-
-    await prefs.setString("pendingNotes", jsonEncode(pendingList));
-
-    // 🔥 USER NOTIFICATION
-    await NotificationService.addNotification(
-      username: note["uploadedBy"],
-      title: "Note Rejected",
-      message: "${note["title"]} was rejected",
-    );
-
-    await loadData();
-  }
-
-  void openFile(String path) async {
-    await OpenFilex.open(path);
-  }
-
-  Widget buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
@@ -116,7 +83,7 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
     );
   }
 
-  Widget buildCard(Map note, int index) {
+  Widget _buildCard(BuildContext context, Map<String, dynamic> note, String noteId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -131,7 +98,6 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          // 🔥 TITLE
           Text(
             note["title"] ?? "No Title",
             style: const TextStyle(fontWeight: FontWeight.bold),
@@ -139,16 +105,22 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
 
           const SizedBox(height: 6),
 
-          // 🔥 NEW: UPLOADER NAME
           Row(
             children: [
               const Icon(Icons.person, size: 16, color: Colors.grey),
               const SizedBox(width: 6),
               Text(
-                note["uploadedBy"] ?? "Unknown",
+                "Subject: ${note['subject'] ?? 'Unknown'}",
                 style: const TextStyle(color: Colors.grey),
               ),
             ],
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            "${note['branch'] ?? ''} - ${note['year'] ?? ''} Year",
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
           ),
 
           const SizedBox(height: 10),
@@ -156,7 +128,13 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
           Row(
             children: [
               ElevatedButton(
-                onPressed: () => openFile(note["path"]),
+                onPressed: () {
+                  final url = note['fileUrl'] ?? '';
+                  if (url.isNotEmpty) {
+                    launchUrl(Uri.parse(url),
+                        mode: LaunchMode.externalApplication);
+                  }
+                },
                 child: const Text("View"),
               ),
 
@@ -165,8 +143,18 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green),
-                onPressed: () => approve(index),
-                child: const Text("Approve"),
+                onPressed: () async {
+                  final uid = AuthService.currentUid ?? '';
+                  await FirestoreService.approveNote(noteId, uid);
+
+                  await NotificationService.addNotification(
+                    username: note['uploadedBy'] ?? '',
+                    title: "Note Approved",
+                    message: "${note['title']} approved by admin",
+                  );
+                },
+                child: const Text("Approve",
+                    style: TextStyle(color: Colors.white)),
               ),
 
               const SizedBox(width: 10),
@@ -174,36 +162,25 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red),
-                onPressed: () => reject(index),
-                child: const Text("Reject"),
+                onPressed: () async {
+                  await FirestoreService.rejectNote(noteId);
+
+                  // Delete file from storage
+                  if (note['fileUrl'] != null) {
+                    await StorageService.deleteFileByUrl(note['fileUrl']);
+                  }
+
+                  await NotificationService.addNotification(
+                    username: note['uploadedBy'] ?? '',
+                    title: "Note Rejected",
+                    message: "${note['title']} was rejected",
+                  );
+                },
+                child: const Text("Reject",
+                    style: TextStyle(color: Colors.white)),
               ),
             ],
           )
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
-
-      body: Column(
-        children: [
-          buildHeader(),
-
-          Expanded(
-            child: pending.isEmpty
-                ? const Center(child: Text("No pending notes"))
-                : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: pending.length,
-              itemBuilder: (context, index) {
-                return buildCard(pending[index], index);
-              },
-            ),
-          ),
         ],
       ),
     );

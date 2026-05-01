@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
-import 'package:college_app/screens/events/event_model.dart';
-import 'package:college_app/screens/events/event_data.dart';
+import 'package:college_app/services/firestore_service.dart';
+import 'package:college_app/services/storage_service.dart';
 import 'package:college_app/services/notification_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:college_app/services/auth_service.dart';
 
 class AddEventPage extends StatefulWidget {
   const AddEventPage({super.key});
@@ -16,10 +16,11 @@ class AddEventPage extends StatefulWidget {
 
 class _AddEventPageState extends State<AddEventPage> {
   final titleController = TextEditingController();
-  final dateController = TextEditingController();
   final descController = TextEditingController();
 
   File? image;
+  DateTime? selectedDate;
+  bool isLoading = false;
 
   Future pickImage() async {
     final picked =
@@ -32,34 +33,64 @@ class _AddEventPageState extends State<AddEventPage> {
     }
   }
 
-  void saveEvent() async {
-    if (titleController.text.isEmpty ||
-        dateController.text.isEmpty ||
-        descController.text.isEmpty ||
-        image == null) return;
-
-    final title = titleController.text;
-
-    events.add(Event(
-      title: title,
-      date: dateController.text,
-      desc: descController.text,
-      image: image!.path,
-    ));
-
-    await saveEvents();
-
-    // ✅ NEW: Notification added
-    final prefs = await SharedPreferences.getInstance();
-    String currentUser = prefs.getString("currentUser") ?? "";
-
-    await NotificationService.addNotification(
-      username: "all",
-      title: "New Event Added",
-      message: "${titleController.text} event created",
+  Future<void> pickDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
     );
 
-    Navigator.pop(context);
+    if (date != null) {
+      setState(() {
+        selectedDate = date;
+      });
+    }
+  }
+
+  void saveEvent() async {
+    if (titleController.text.isEmpty ||
+        descController.text.isEmpty ||
+        selectedDate == null ||
+        image == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill all fields")),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      // Upload poster to Firebase Storage
+      final imageUrl = await StorageService.uploadEventPoster(image!);
+
+      // Save event to Firestore
+      await FirestoreService.addEvent(
+        title: titleController.text.trim(),
+        description: descController.text.trim(),
+        date: selectedDate!,
+        imageUrl: imageUrl,
+        createdBy: AuthService.currentUid ?? '',
+      );
+
+      // Notify all users
+      await NotificationService.addNotification(
+        username: "all",
+        title: "New Event Added",
+        message: "${titleController.text.trim()} event created",
+      );
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   @override
@@ -70,6 +101,7 @@ class _AddEventPageState extends State<AddEventPage> {
       appBar: AppBar(
         title: const Text("Add Event"),
         backgroundColor: const Color(0xFF4A6CF7),
+        foregroundColor: Colors.white,
       ),
 
       body: SingleChildScrollView(
@@ -78,8 +110,40 @@ class _AddEventPageState extends State<AddEventPage> {
           children: [
 
             _field(titleController, "Event Title"),
-            _field(dateController, "Date"),
-            _field(descController, "Description"),
+            _field(descController, "Description", maxLines: 3),
+
+            const SizedBox(height: 12),
+
+            // Date Picker
+            GestureDetector(
+              onTap: pickDate,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today,
+                        color: Color(0xFF4A6CF7)),
+                    const SizedBox(width: 12),
+                    Text(
+                      selectedDate != null
+                          ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}"
+                          : "Select Date",
+                      style: TextStyle(
+                        color: selectedDate != null
+                            ? Colors.black
+                            : Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
             const SizedBox(height: 20),
 
@@ -91,12 +155,20 @@ class _AddEventPageState extends State<AddEventPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Color(0xFF4A6CF7)),
+                  border: Border.all(color: const Color(0xFF4A6CF7)),
                 ),
                 child: image == null
                     ? const Center(
-                  child: Text("Choose Poster",
-                      style: TextStyle(color: Colors.grey)),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_photo_alternate,
+                          size: 40, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text("Choose Poster",
+                          style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
                 )
                     : ClipRRect(
                   borderRadius: BorderRadius.circular(16),
@@ -107,14 +179,32 @@ class _AddEventPageState extends State<AddEventPage> {
 
             const SizedBox(height: 20),
 
-            ElevatedButton(
-              onPressed: saveEvent,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A6CF7),
-                minimumSize: const Size(double.infinity, 50),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : saveEvent,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A6CF7),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text("Add Event",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        )),
               ),
-              child: const Text("Add Event",
-                  style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -122,11 +212,12 @@ class _AddEventPageState extends State<AddEventPage> {
     );
   }
 
-  Widget _field(controller, hint) {
+  Widget _field(TextEditingController controller, String hint, {int maxLines = 1}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: controller,
+        maxLines: maxLines,
         decoration: InputDecoration(
           hintText: hint,
           filled: true,

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../models/user_role.dart';
-import '../../services/notification_service.dart';
+import 'package:college_app/services/auth_service.dart';
+import 'package:college_app/services/firestore_service.dart';
+import 'package:college_app/services/notification_service.dart';
 
 class NotificationPage extends StatefulWidget {
   const NotificationPage({super.key});
@@ -14,87 +14,23 @@ class NotificationPage extends StatefulWidget {
 
 class _NotificationPageState extends State<NotificationPage> {
 
-  List requests = [];
-  List notifications = [];
   String role = "";
-  String username = "";
+  String uid = "";
 
   @override
   void initState() {
     super.initState();
-    loadData();
+    _loadData();
   }
 
-  // 🔥 ONLY CHANGE: loadData FIX
-  Future loadData() async {
-    final prefs = await SharedPreferences.getInstance();
+  Future _loadData() async {
+    uid = AuthService.currentUid ?? '';
+    role = await AuthService.getUserRole();
 
-    username = prefs.getString("currentUser") ?? "";
-    role = await UserRole.getRole(username);
+    // Mark all as read
+    await FirestoreService.markAllNotificationsRead(uid);
 
-    notifications = await NotificationService.getNotifications(username);
-
-    final data = prefs.getString("adminRequests");
-    requests = data != null ? jsonDecode(data) : [];
-
-    // 🔥 SAFE MARK READ
-    await NotificationService.markAllRead(username);
-
-    setState(() {});
-  }
-
-  Future approve(String username) async {
-    await UserRole.approveAdmin(username);
-
-    await NotificationService.addNotification(
-      username: username,
-      title: "Admin Access Granted",
-      message: "You are now an admin",
-    );
-
-    await loadData();
-  }
-
-  Future reject(String username) async {
-    await UserRole.rejectAdmin(username);
-
-    await NotificationService.addNotification(
-      username: username,
-      title: "Admin Request Rejected",
-      message: "Your admin request was rejected",
-    );
-
-    await loadData();
-  }
-
-  Future removeAdmin(String user) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final data = prefs.getString("approvedAdmins");
-    List admins = data != null ? jsonDecode(data) : [];
-    admins.remove(user);
-
-    await prefs.setString("approvedAdmins", jsonEncode(admins));
-
-    // 🔥 request status update
-    final reqData = prefs.getString("adminRequests");
-    List reqs = reqData != null ? jsonDecode(reqData) : [];
-
-    for (var r in reqs) {
-      if (r["username"] == user) {
-        r["status"] = "removed";
-      }
-    }
-
-    await prefs.setString("adminRequests", jsonEncode(reqs));
-
-    await NotificationService.addNotification(
-      username: user,
-      title: "Admin Removed",
-      message: "You have been removed as admin",
-    );
-
-    await loadData();
+    if (mounted) setState(() {});
   }
 
   Widget _header(BuildContext context) {
@@ -175,7 +111,7 @@ class _NotificationPageState extends State<NotificationPage> {
     );
   }
 
-  Widget _adminCard(Map req) {
+  Widget _adminRequestCard(Map<String, dynamic> req, String reqId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -199,7 +135,7 @@ class _NotificationPageState extends State<NotificationPage> {
               ),
               const SizedBox(width: 10),
               Text(
-                req["username"],
+                req["username"] ?? "Unknown",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                 ),
@@ -214,25 +150,59 @@ class _NotificationPageState extends State<NotificationPage> {
               children: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  onPressed: () => approve(req["username"]),
-                  child: const Text("Approve"),
+                  onPressed: () async {
+                    await FirestoreService.approveAdminRequest(
+                      req['userId'],
+                      uid,
+                    );
+
+                    await NotificationService.addNotification(
+                      username: req['userId'],
+                      title: "Admin Access Granted",
+                      message: "You are now an admin",
+                    );
+                  },
+                  child: const Text("Approve",
+                      style: TextStyle(color: Colors.white)),
                 ),
                 const SizedBox(width: 10),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () => reject(req["username"]),
-                  child: const Text("Reject"),
+                  onPressed: () async {
+                    await FirestoreService.rejectAdminRequest(
+                      req['userId'],
+                      uid,
+                    );
+
+                    await NotificationService.addNotification(
+                      username: req['userId'],
+                      title: "Admin Request Rejected",
+                      message: "Your admin request was rejected",
+                    );
+                  },
+                  child: const Text("Reject",
+                      style: TextStyle(color: Colors.white)),
                 ),
               ],
             )
           else if (req["status"] == "approved")
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              onPressed: () => removeAdmin(req["username"]),
-              child: const Text("Remove Admin"),
+              onPressed: () async {
+                await FirestoreService.removeAdmin(req['userId']);
+
+                await NotificationService.addNotification(
+                  username: req['userId'],
+                  title: "Admin Removed",
+                  message: "You have been removed as admin",
+                );
+              },
+              child: const Text("Remove Admin",
+                  style: TextStyle(color: Colors.white)),
             )
           else
-            Text("Status: ${req["status"]}"),
+            Text("Status: ${req['status']}",
+                style: const TextStyle(color: Colors.grey)),
         ],
       ),
     );
@@ -252,53 +222,64 @@ class _NotificationPageState extends State<NotificationPage> {
               padding: const EdgeInsets.all(16),
               children: [
 
-                // 🔥 GENERAL SECTION (for root)
-                if (role == "root" && notifications.isNotEmpty) ...[
-                  const Text(
-                    "General Notifications",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                ],
+                // Notifications stream
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirestoreService.streamNotifications(uid),
+                  builder: (context, snapshot) {
+                    final docs = snapshot.data?.docs ?? [];
 
-                // 🔥 EMPTY STATE
-                if (notifications.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 40),
-                    child: Center(
-                      child: Text(
-                        "No new notifications",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                  ),
+                    if (docs.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(top: 40),
+                        child: Center(
+                          child: Text(
+                            "No new notifications",
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      );
+                    }
 
-                // 🔥 NOTIFICATIONS
-                ...List.generate(notifications.length, (index) {
-                  final n = notifications[index];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (role == "root") ...[
+                          const Text(
+                            "General Notifications",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
 
-                  return Dismissible(
-                    key: Key(n["time"]),
-                    direction: DismissDirection.endToStart,
-                    onDismissed: (_) async {
-                      final actualIndex = notifications.indexOf(n);
-                      await NotificationService.removeNotification(username, actualIndex);
-                      await loadData();
-                    },
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      color: Colors.red,
-                      child: const Icon(Icons.delete, color: Colors.white),
-                    ),
-                    child: _card(
-                      title: n["title"],
-                      subtitle: n["message"],
-                    ),
-                  );
-                }),
+                        ...docs.map((doc) {
+                          final data = doc.data();
+                          return Dismissible(
+                            key: Key(doc.id),
+                            direction: DismissDirection.endToStart,
+                            onDismissed: (_) async {
+                              await FirestoreService.deleteNotification(
+                                uid,
+                                doc.id,
+                              );
+                            },
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 20),
+                              color: Colors.red,
+                              child: const Icon(Icons.delete, color: Colors.white),
+                            ),
+                            child: _card(
+                              title: data['title'] ?? '',
+                              subtitle: data['message'] ?? '',
+                            ),
+                          );
+                        }),
+                      ],
+                    );
+                  },
+                ),
 
-                // 🔥 ADMIN REQUEST SECTION
+                // Admin requests (root only)
                 if (role == "root") ...[
                   const SizedBox(height: 20),
                   const Text(
@@ -306,7 +287,24 @@ class _NotificationPageState extends State<NotificationPage> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
-                  ...requests.map((req) => _adminCard(req)),
+
+                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: FirestoreService.streamAdminRequests(),
+                    builder: (context, snapshot) {
+                      final docs = snapshot.data?.docs ?? [];
+
+                      if (docs.isEmpty) {
+                        return const Text("No admin requests",
+                            style: TextStyle(color: Colors.grey));
+                      }
+
+                      return Column(
+                        children: docs.map((doc) {
+                          return _adminRequestCard(doc.data(), doc.id);
+                        }).toList(),
+                      );
+                    },
+                  ),
                 ],
               ],
             ),

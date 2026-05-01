@@ -1,40 +1,80 @@
-class UserModel {
-  final String username;
-  final String password;
-  String branch;
-  String semester;
-  String? profilePic;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-  Map<String, dynamic> attendance;
+class UserModel {
+  final String uid;
+  final String email;
+  final String displayName;
+  final String username;
+  final String role; // 'user', 'admin', 'root'
+  final String? profilePicUrl;
+  final String enrollmentNo;
+  final String branch;
+  final String semester;
+  final String year;
+  final String phone;
+  final String age;
+  final String? fcmToken;
+  final DateTime? createdAt;
 
   UserModel({
+    required this.uid,
+    required this.email,
+    required this.displayName,
     required this.username,
-    required this.password,
-    this.branch = "",
-    this.semester = "",
-    this.profilePic,
-    Map<String, dynamic>? attendance,
-  }) : attendance = attendance ?? {};
+    this.role = 'user',
+    this.profilePicUrl,
+    this.enrollmentNo = '',
+    this.branch = '',
+    this.semester = '',
+    this.year = '',
+    this.phone = '',
+    this.age = '',
+    this.fcmToken,
+    this.createdAt,
+  });
 
   Map<String, dynamic> toJson() {
     return {
-      "username": username,
-      "password": password,
-      "branch": branch,
-      "semester": semester,
-      "profilePic": profilePic,
-      "attendance": attendance,
+      'uid': uid,
+      'email': email,
+      'displayName': displayName,
+      'username': username,
+      'role': role,
+      'profilePicUrl': profilePicUrl,
+      'enrollmentNo': enrollmentNo,
+      'branch': branch,
+      'semester': semester,
+      'year': year,
+      'phone': phone,
+      'age': age,
+      'fcmToken': fcmToken,
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
     };
   }
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      username: json["username"],
-      password: json["password"],
-      branch: json["branch"] ?? "",
-      semester: json["semester"] ?? "",
-      profilePic: json["profilePic"],
-      attendance: Map<String, dynamic>.from(json["attendance"] ?? {}),
+      uid: json['uid'] ?? '',
+      email: json['email'] ?? '',
+      displayName: json['displayName'] ?? '',
+      username: json['username'] ?? '',
+      role: json['role'] ?? 'user',
+      profilePicUrl: json['profilePicUrl'],
+      enrollmentNo: json['enrollmentNo'] ?? '',
+      branch: json['branch'] ?? '',
+      semester: json['semester'] ?? '',
+      year: json['year'] ?? '',
+      phone: json['phone'] ?? '',
+      age: json['age'] ?? '',
+      fcmToken: json['fcmToken'],
+      createdAt: json['createdAt'] is Timestamp
+          ? (json['createdAt'] as Timestamp).toDate()
+          : null,
     );
+  }
+
+  factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return UserModel.fromJson({...data, 'uid': doc.id});
   }
 }

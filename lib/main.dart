@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:college_app/screens/auth/login_page.dart';
 import 'package:college_app/screens/home/home_page.dart';
+import 'package:college_app/services/fcm_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await FCMService.init();
   runApp(const MyApp());
 }
 
@@ -13,51 +18,42 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: RootPage(),
+      theme: ThemeData(
+        primaryColor: const Color(0xFF4A6CF7),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF4A6CF7),
+        ),
+      ),
+      home: const RootPage(),
     );
   }
 }
 
-class RootPage extends StatefulWidget {
+class RootPage extends StatelessWidget {
   const RootPage({super.key});
 
   @override
-  State<RootPage> createState() => _RootPageState();
-}
-
-class _RootPageState extends State<RootPage> {
-  bool? isLoggedIn;
-  String username = "";
-
-  @override
-  void initState() {
-    super.initState();
-    checkLogin();
-  }
-
-  Future<void> checkLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    setState(() {
-      isLoggedIn = prefs.getBool("isLoggedIn") ?? false;
-
-      // ✅ FIX (important)
-      username = prefs.getString("currentUser") ?? "";
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (isLoggedIn == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Still loading
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    return isLoggedIn! && username.isNotEmpty
-        ? HomeScreen(userName: username)
-        : const LoginPage();
+        // User is logged in
+        if (snapshot.hasData && snapshot.data != null) {
+          return HomeScreen(userName: snapshot.data!.uid);
+        }
+
+        // Not logged in
+        return const LoginPage();
+      },
+    );
   }
 }

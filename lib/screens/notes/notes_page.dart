@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:college_app/screens/notes/branch_page.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:college_app/screens/notes/admin_notes_page.dart';
+import 'package:college_app/services/auth_service.dart';
 
-class NotesPage extends StatelessWidget {
+class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
 
-  // 🔵 HEADER (same as before)
+  @override
+  State<NotesPage> createState() => _NotesPageState();
+}
+
+class _NotesPageState extends State<NotesPage> {
+  String role = 'user';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    final r = await AuthService.getUserRole();
+    if (mounted) setState(() => role = r);
+  }
+
   Widget buildHeader(BuildContext context, String title) {
     return Container(
       width: double.infinity,
@@ -38,33 +55,20 @@ class NotesPage extends StatelessWidget {
             ),
           ),
 
-          // 🔥 ADMIN BUTTON
-          FutureBuilder(
-            future: SharedPreferences.getInstance(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox();
-
-              final prefs = snapshot.data!;
-              final role = prefs.getString("role") ?? "user";
-
-              if (role == "admin" || role == "root") {
-                return IconButton(
-                  icon: const Icon(Icons.admin_panel_settings,
-                      color: Colors.white),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AdminNotesPage(),
-                      ),
-                    );
-                  },
+          // Admin button
+          if (role == "admin" || role == "root")
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings,
+                  color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminNotesPage(),
+                  ),
                 );
-              }
-
-              return const SizedBox();
-            },
-          ),
+              },
+            ),
         ],
       ),
     );
@@ -74,7 +78,6 @@ class NotesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final years = ["1st", "2nd", "3rd", "4th"];
 
-    // 🔥 SAME COLORS AS SUBJECTS PAGE
     final colors = [
       Colors.blue,
       Colors.green,

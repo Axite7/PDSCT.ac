@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:college_app/services/firestore_service.dart';
+import 'package:college_app/services/storage_service.dart';
+import 'package:college_app/services/location_service.dart';
+import 'package:college_app/services/auth_service.dart';
 
 class AttendancePage extends StatefulWidget {
   final String username;
@@ -20,8 +27,11 @@ class _AttendancePageState extends State<AttendancePage> {
 
   Set<DateTime> presentDays = {};
   Set<DateTime> holidays = {};
+  bool isMarking = false;
 
   DateTime norm(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  String get uid => AuthService.currentUid ?? widget.username;
 
   @override
   void initState() {
@@ -29,7 +39,6 @@ class _AttendancePageState extends State<AttendancePage> {
     fetchHolidays(DateTime.now().year);
   }
 
-  // 🔥 OPTIONAL API (ignore if fails)
   Future fetchHolidays(int year) async {
     try {
       final url =
@@ -53,14 +62,82 @@ class _AttendancePageState extends State<AttendancePage> {
   }
 
   Future markAttendance() async {
-    if (selectedDay == null) return;
+    if (selectedDay == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Select a day first")),
+      );
+      return;
+    }
 
-    final image = await ImagePicker().pickImage(source: ImageSource.camera);
-    if (image == null) return;
+    setState(() => isMarking = true);
 
-    setState(() {
-      presentDays.add(norm(selectedDay!));
-    });
+    try {
+      // Check location
+      final locationResult = await LocationService.isWithinCampus();
+
+      if (!mounted) return;
+
+      if (locationResult['isWithin'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(locationResult['message'] ?? 'Not within campus'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        // Allow marking anyway but record the location
+      }
+
+      // Take selfie
+      final image = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (image == null) {
+        setState(() => isMarking = false);
+        return;
+      }
+
+      // Upload selfie to Firebase Storage
+      final photoUrl = await StorageService.uploadAttendanceSelfie(
+        File(image.path),
+        uid,
+      );
+
+      // Save attendance to Firestore
+      GeoPoint? geoPoint;
+      if (locationResult['latitude'] != null) {
+        geoPoint = GeoPoint(
+          locationResult['latitude'],
+          locationResult['longitude'],
+        );
+      }
+
+      await FirestoreService.markAttendance(
+        userId: uid,
+        date: selectedDay!,
+        status: 'present',
+        photoUrl: photoUrl,
+        location: geoPoint,
+      );
+
+      setState(() {
+        presentDays.add(norm(selectedDay!));
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Attendance marked successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isMarking = false);
+    }
   }
 
   Widget header() {
@@ -88,112 +165,197 @@ class _AttendancePageState extends State<AttendancePage> {
 
   @override
   Widget build(BuildContext context) {
-    final today = norm(DateTime.now());
-
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F8),
 
-      body: Column(
-        children: [
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirestoreService.streamAttendance(uid),
+        builder: (context, snapshot) {
+          // Build present days set from Firestore data
+          if (snapshot.hasData) {
+            presentDays = snapshot.data!.docs.map((doc) {
+              final data = doc.data();
+              if (data['date'] is Timestamp) {
+                return norm((data['date'] as Timestamp).toDate());
+              }
+              return norm(DateTime.now());
+            }).toSet();
+          }
 
-          header(),
+          int totalDays = DateTime.now().difference(
+            DateTime(DateTime.now().year, 1, 1),
+          ).inDays;
+          int presentCount = presentDays.length;
+          double percentage = totalDays > 0
+              ? (presentCount / totalDays * 100)
+              : 0;
 
-          const SizedBox(height: 10),
+          return Column(
+            children: [
 
-          TableCalendar(
-            firstDay: DateTime.utc(2020),
-            lastDay: DateTime.utc(2030),
-            focusedDay: focusedDay,
+              header(),
 
-            calendarFormat: CalendarFormat.month,
+              const SizedBox(height: 10),
 
-            headerStyle: const HeaderStyle(
-              formatButtonVisible: false,
-              titleCentered: true,
-            ),
+              // Attendance Stats
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 8)
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _statItem("Present", "$presentCount", Colors.green),
+                    _statItem("Percentage",
+                        "${percentage.toStringAsFixed(1)}%", Colors.blue),
+                  ],
+                ),
+              ),
 
-            selectedDayPredicate: (day) =>
-            selectedDay != null && norm(day) == selectedDay,
+              const SizedBox(height: 10),
 
-            onDaySelected: (selected, focused) {
-              setState(() {
-                selectedDay = norm(selected);
-                focusedDay = focused;
-              });
-            },
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      TableCalendar(
+                        firstDay: DateTime.utc(2020),
+                        lastDay: DateTime.utc(2030),
+                        focusedDay: focusedDay,
 
-            onPageChanged: (focused) {
-              focusedDay = focused;
-              fetchHolidays(focused.year);
-            },
+                        calendarFormat: CalendarFormat.month,
 
-            calendarBuilders: CalendarBuilders(
+                        headerStyle: const HeaderStyle(
+                          formatButtonVisible: false,
+                          titleCentered: true,
+                        ),
 
-              // 🔵 TODAY
-              todayBuilder: (context, day, _) {
-                final d = norm(day);
-                bool isPresent = presentDays.contains(d);
+                        selectedDayPredicate: (day) =>
+                        selectedDay != null && norm(day) == selectedDay,
 
-                return buildCircle(
-                  day,
-                  isPresent ? Colors.green : Colors.transparent,
-                  border: Border.all(
-                    color: Color(0xFF4A6CF7),
-                    width: 2,
+                        onDaySelected: (selected, focused) {
+                          setState(() {
+                            selectedDay = norm(selected);
+                            focusedDay = focused;
+                          });
+                        },
+
+                        onPageChanged: (focused) {
+                          focusedDay = focused;
+                          fetchHolidays(focused.year);
+                        },
+
+                        calendarBuilders: CalendarBuilders(
+
+                          todayBuilder: (context, day, _) {
+                            final d = norm(day);
+                            bool isPresent = presentDays.contains(d);
+
+                            return buildCircle(
+                              day,
+                              isPresent ? Colors.green : Colors.transparent,
+                              border: Border.all(
+                                color: const Color(0xFF4A6CF7),
+                                width: 2,
+                              ),
+                            );
+                          },
+
+                          selectedBuilder: (context, day, _) {
+                            return buildCircle(
+                              day,
+                              const Color(0xFF4A6CF7).withOpacity(0.3),
+                            );
+                          },
+
+                          defaultBuilder: (context, day, _) {
+                            final d = norm(day);
+
+                            bool isPresent = presentDays.contains(d);
+                            bool isSunday = day.weekday == DateTime.sunday;
+                            bool isHoliday = holidays.any((h) =>
+                            h.year == d.year &&
+                                h.month == d.month &&
+                                h.day == d.day);
+
+                            Color bg = Colors.transparent;
+
+                            if (isPresent) {
+                              bg = Colors.green;
+                            } else if (isHoliday || isSunday) {
+                              bg = Colors.red;
+                            }
+
+                            return buildCircle(day, bg);
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4A6CF7),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: isMarking ? null : markAttendance,
+                            child: isMarking
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text("Mark Attendance",
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    )),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                );
-              },
-
-              // 🟡 SELECTED
-              selectedBuilder: (context, day, _) {
-                return buildCircle(
-                  day,
-                  Color(0xFF4A6CF7).withOpacity(0.3),
-                );
-              },
-
-              // 🔥 DEFAULT
-              defaultBuilder: (context, day, _) {
-                final d = norm(day);
-
-                bool isPresent = presentDays.contains(d);
-
-                // 🔥 SUNDAY CHECK
-                bool isSunday = day.weekday == DateTime.sunday;
-
-                // 🔥 API HOLIDAY CHECK
-                bool isHoliday = holidays.any((h) =>
-                h.year == d.year &&
-                    h.month == d.month &&
-                    h.day == d.day);
-
-                Color bg = Colors.transparent;
-
-                if (isPresent) {
-                  bg = Colors.green;
-                } else if (isHoliday || isSunday) {
-                  bg = Colors.red;
-                }
-
-                return buildCircle(day, bg);
-              },
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF4A6CF7),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-            ),
-            onPressed: markAttendance,
-            child: const Text("Mark Attendance",
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
+    );
+  }
+
+  Widget _statItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(color: Colors.grey[600])),
+      ],
     );
   }
 

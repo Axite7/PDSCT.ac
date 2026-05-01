@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'signup_page.dart';
-import '../../models/user_model.dart';
 import '../home/home_page.dart';
-import '../../models/user_role.dart';
+import '../../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,70 +14,59 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
 
-  final usernameController = TextEditingController();
+  final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
   bool obscurePassword = true;
-  bool loginAsAdmin = false;
-
-  // ONLY CHANGE: inside login() function
+  bool isLoading = false;
 
   Future<void> login() async {
-    final prefs = await SharedPreferences.getInstance();
+    if (emailController.text.trim().isEmpty ||
+        passwordController.text.trim().isEmpty) {
+      _showMessage("Please fill all fields");
+      return;
+    }
 
-    final username = usernameController.text.trim();
-    final password = passwordController.text.trim();
+    setState(() => isLoading = true);
 
-    // ROOT LOGIN
-    if (username == "Axite7" && password == "Axite@717") {
-      await prefs.setString("currentUser", username);
-      await prefs.setString("role", "root");
+    try {
+      await AuthService.signIn(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
 
-      // ✅ FIX
-      await prefs.setBool("isLoggedIn", true);
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => HomeScreen(userName: username),
+          builder: (_) => HomeScreen(
+            userName: AuthService.currentUid ?? '',
+          ),
         ),
       );
+    } on FirebaseAuthException catch (e) {
+      _showMessage(e.message ?? "Login failed");
+    } catch (e) {
+      _showMessage("Login failed: $e");
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> forgotPassword() async {
+    final email = emailController.text.trim();
+    if (email.isEmpty) {
+      _showMessage("Enter your email first");
       return;
     }
 
-    final usersData = prefs.getStringList("users") ?? [];
-
-    final users = usersData
-        .map((e) => UserModel.fromJson(jsonDecode(e)))
-        .toList();
-
-    final user = users.where((u) =>
-    u.username == username && u.password == password);
-
-    if (user.isEmpty) {
-      _showMessage("Invalid credentials");
-      return;
+    try {
+      await AuthService.resetPassword(email);
+      _showMessage("Password reset link sent to $email");
+    } catch (e) {
+      _showMessage("Error: $e");
     }
-
-    String role = await UserRole.getRole(username);
-
-    if (loginAsAdmin && role == "user") {
-      await UserRole.requestAdmin(username);
-      _showMessage("Admin request sent");
-    }
-
-    await prefs.setString("currentUser", username);
-    await prefs.setString("role", role);
-
-    // ✅ FIX
-    await prefs.setBool("isLoggedIn", true);
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => HomeScreen(userName: username),
-      ),
-    );
   }
 
   void _showMessage(String msg) {
@@ -87,11 +74,12 @@ class _LoginPageState extends State<LoginPage> {
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  InputDecoration _input(String hint, {Widget? suffix}) {
+  InputDecoration _input(String hint, {Widget? suffix, Widget? prefix}) {
     return InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: Colors.white,
+      prefixIcon: prefix,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
@@ -144,8 +132,12 @@ class _LoginPageState extends State<LoginPage> {
                 children: [
 
                   TextField(
-                    controller: usernameController,
-                    decoration: _input("Username"),
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: _input(
+                      "Email",
+                      prefix: const Icon(Icons.email_outlined),
+                    ),
                   ),
 
                   const SizedBox(height: 15),
@@ -155,6 +147,7 @@ class _LoginPageState extends State<LoginPage> {
                     obscureText: obscurePassword,
                     decoration: _input(
                       "Password",
+                      prefix: const Icon(Icons.lock_outline),
                       suffix: IconButton(
                         icon: Icon(
                           obscurePassword
@@ -172,19 +165,15 @@ class _LoginPageState extends State<LoginPage> {
 
                   const SizedBox(height: 10),
 
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: loginAsAdmin,
-                        onChanged: (val) {
-                          setState(() => loginAsAdmin = val ?? false);
-                        },
-                      ),
-                      const Text("Login as Admin"),
-                    ],
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: forgotPassword,
+                      child: const Text("Forgot Password?"),
+                    ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
 
                   SizedBox(
                     width: double.infinity,
@@ -192,10 +181,25 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4A6CF7),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
-                      onPressed: login,
-                      child: const Text("Login",
-                          style: TextStyle(color: Colors.white)),
+                      onPressed: isLoading ? null : login,
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text("Login",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              )),
                     ),
                   ),
 

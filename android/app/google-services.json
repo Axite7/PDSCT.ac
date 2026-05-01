@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "776161996652",
+    "project_id": "pdsct-f5245",
+    "storage_bucket": "pdsct-f5245.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776161996652:android:93284ed568b13b071bcd49",
+        "android_client_info": {
+          "package_name": "com.example.college_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2rwQHHYej8WOxFmzA3wytKfVsmkqNzaU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

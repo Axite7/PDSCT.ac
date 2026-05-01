@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
+
+import 'package:college_app/services/firestore_service.dart';
+import 'package:college_app/services/storage_service.dart';
+import 'package:college_app/services/auth_service.dart';
 
 class TimetableDetailPage extends StatefulWidget {
   final int semester;
@@ -24,79 +27,99 @@ class TimetableDetailPage extends StatefulWidget {
 class _TimetableDetailPageState
     extends State<TimetableDetailPage> {
 
-  File? file;
-
-  String get keyName =>
-      "file_${widget.semester}_${widget.type}";
+  String? fileUrl;
+  bool isUploading = false;
+  String role = 'user';
 
   @override
   void initState() {
     super.initState();
-    loadFile();
+    _loadRole();
   }
 
-  Future<void> loadFile() async {
-    final prefs = await SharedPreferences.getInstance();
-    final path = prefs.getString(keyName);
-
-    if (path != null) {
-      final f = File(path);
-      if (await f.exists()) {
-        setState(() {
-          file = f;
-        });
-      }
-    }
+  Future<void> _loadRole() async {
+    final r = await AuthService.getUserRole();
+    if (mounted) setState(() => role = r);
   }
 
   Future<void> pickFile() async {
+    if (role != 'admin' && role != 'root') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Only admins can upload timetables")),
+      );
+      return;
+    }
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'png'],
     );
 
-    if (result == null) return;
+    if (result == null || result.files.single.path == null) return;
 
-    final originalPath = result.files.single.path;
-    if (originalPath == null) return;
+    setState(() => isUploading = true);
 
-    final pickedFile = File(originalPath);
+    try {
+      final file = File(result.files.single.path!);
 
-    final dir = await getApplicationDocumentsDirectory();
+      // Upload to Firebase Storage
+      final url = await StorageService.uploadTimetable(file);
 
-    final fileName =
-        "sem${widget.semester}_${widget.type}.${pickedFile.path.split('.').last}";
+      // Save to Firestore
+      await FirestoreService.uploadTimetable(
+        semester: widget.semester,
+        type: widget.type,
+        fileUrl: url,
+        uploadedBy: AuthService.currentUid ?? '',
+      );
 
-    final newFile = await pickedFile.copy("${dir.path}/$fileName");
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(keyName, newFile.path);
-
-    setState(() {
-      file = newFile;
-    });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Timetable uploaded!")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isUploading = false);
+    }
   }
 
   Future<void> deleteFile() async {
-    if (file != null && await file!.exists()) {
-      await file!.delete();
+    if (role != 'admin' && role != 'root') return;
+
+    try {
+      if (fileUrl != null) {
+        await StorageService.deleteFileByUrl(fileUrl!);
+      }
+      await FirestoreService.deleteTimetable(widget.semester, widget.type);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Timetable deleted")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(keyName);
-
-    setState(() {
-      file = null;
-    });
   }
 
   void shareFile() {
-    if (file != null) {
-      Share.shareXFiles([XFile(file!.path)]);
+    if (fileUrl != null) {
+      Share.share(
+        'Timetable for Sem ${widget.semester} - ${widget.type}\n$fileUrl',
+      );
     }
   }
 
-  // 🔵 SAME ROUNDED HEADER STYLE
   Widget buildHeader() {
     return Container(
       width: double.infinity,
@@ -135,30 +158,70 @@ class _TimetableDetailPageState
             icon: const Icon(Icons.share, color: Colors.white),
           ),
 
-          IconButton(
-            onPressed: deleteFile,
-            icon: const Icon(Icons.delete, color: Colors.white),
-          ),
+          if (role == 'admin' || role == 'root')
+            IconButton(
+              onPressed: deleteFile,
+              icon: const Icon(Icons.delete, color: Colors.white),
+            ),
         ],
       ),
     );
   }
 
-  Widget viewer() {
-    if (file == null) {
+  Widget viewer(String? url) {
+    if (url == null || url.isEmpty) {
       return const Center(
-        child: Text("No file uploaded"),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.upload_file, size: 60, color: Colors.grey),
+            SizedBox(height: 16),
+            Text("No timetable uploaded yet",
+                style: TextStyle(color: Colors.grey, fontSize: 16)),
+          ],
+        ),
       );
     }
 
-    if (file!.path.endsWith(".pdf")) {
-      return PDFView(
-        filePath: file!.path,
+    // For images, show from network
+    if (url.contains('.jpg') || url.contains('.png') || url.contains('.jpeg') ||
+        url.contains('image')) {
+      return InteractiveViewer(
+        child: CachedNetworkImage(
+          imageUrl: url,
+          placeholder: (context, url) =>
+              const Center(child: CircularProgressIndicator()),
+          errorWidget: (context, url, error) =>
+              const Center(child: Icon(Icons.error, size: 50)),
+        ),
       );
     }
 
-    return InteractiveViewer(
-      child: Image.file(file!),
+    // For PDFs, show download link
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.picture_as_pdf, size: 80, color: Color(0xFF4A6CF7)),
+          const SizedBox(height: 16),
+          const Text("PDF Timetable Uploaded",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A6CF7),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            onPressed: () {
+              // Open in browser
+              // launchUrl(Uri.parse(url));
+            },
+            icon: const Icon(Icons.download, color: Colors.white),
+            label: const Text("View PDF",
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -167,31 +230,45 @@ class _TimetableDetailPageState
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
 
-      body: Column(
-        children: [
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirestoreService.streamTimetable(widget.semester, widget.type),
+        builder: (context, snapshot) {
+          fileUrl = snapshot.data?.data()?['fileUrl'];
 
-          buildHeader(),
+          return Column(
+            children: [
 
-          Expanded(child: viewer()),
+              buildHeader(),
 
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A6CF7),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: pickFile,
-                child: const Text(
-                  "Upload Timetable",
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-          )
-        ],
+              if (isUploading)
+                const LinearProgressIndicator(),
+
+              Expanded(child: viewer(fileUrl)),
+
+              if (role == 'admin' || role == 'root')
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4A6CF7),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: isUploading ? null : pickFile,
+                      child: const Text(
+                        "Upload Timetable",
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                )
+            ],
+          );
+        },
       ),
     );
   }

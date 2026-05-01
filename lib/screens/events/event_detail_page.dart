@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:college_app/screens/events/event_model.dart';
-import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:college_app/models/event_model.dart';
 
 class EventDetailPage extends StatelessWidget {
-  final Event event;
+  final EventModel event;
 
   const EventDetailPage({super.key, required this.event});
 
@@ -51,18 +51,29 @@ class EventDetailPage extends StatelessWidget {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: Image.file(
-                      File(event.image),
+                    child: CachedNetworkImage(
+                      imageUrl: event.imageUrl,
                       height: 220,
                       width: double.infinity,
                       fit: BoxFit.cover,
+                      placeholder: (context, url) => const SizedBox(
+                        height: 220,
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => const SizedBox(
+                        height: 220,
+                        child: Center(
+                          child: Icon(Icons.broken_image,
+                              color: Colors.white54, size: 50),
+                        ),
+                      ),
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
-                // 🔥 TITLE BOX (HEAVY LOOK)
+                // 🔥 TITLE BOX
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -73,7 +84,7 @@ class EventDetailPage extends StatelessWidget {
                       ],
                     ),
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black26,
                         blurRadius: 10,
@@ -112,7 +123,6 @@ class EventDetailPage extends StatelessWidget {
                   child: Row(
                     children: [
 
-                      // mini calendar icon style
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
@@ -135,7 +145,7 @@ class EventDetailPage extends StatelessWidget {
                                 fontSize: 12),
                           ),
                           Text(
-                            event.date,
+                            event.formattedDate,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -150,7 +160,7 @@ class EventDetailPage extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // 🔥 DESCRIPTION BOX (GLASS STYLE)
+                // 🔥 DESCRIPTION BOX
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -180,7 +190,7 @@ class EventDetailPage extends StatelessWidget {
                       const SizedBox(height: 10),
 
                       Text(
-                        event.desc,
+                        event.description,
                         style: const TextStyle(
                           color: Colors.white,
                           height: 1.5,

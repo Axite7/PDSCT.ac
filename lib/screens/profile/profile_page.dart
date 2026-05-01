@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
-import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 
-import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
+import '../../services/storage_service.dart';
 import 'package:college_app/screens/auth/login_page.dart';
 
 class ProfilePage extends StatefulWidget {
-  final String username;
+  final String username; // This is now the UID
 
   const ProfilePage({super.key, required this.username});
 
@@ -20,20 +22,23 @@ class _ProfilePageState extends State<ProfilePage> {
 
   final displayName = TextEditingController();
   final usernameController = TextEditingController();
-
-  final enrollment = TextEditingController(); // ✅ NEW FIELD
-
+  final emailController = TextEditingController();
+  final enrollment = TextEditingController();
   final age = TextEditingController();
   final year = TextEditingController();
   final branch = TextEditingController();
   final sem = TextEditingController();
   final phone = TextEditingController();
-  final email = TextEditingController();
 
   final oldPass = TextEditingController();
   final newPass = TextEditingController();
 
-  String? imagePath;
+  String? profilePicUrl;
+  File? newImage;
+  bool isLoading = false;
+  bool isSaving = false;
+
+  String get uid => AuthService.currentUid ?? widget.username;
 
   @override
   void initState() {
@@ -42,28 +47,29 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future loadProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    String user = widget.username;
+    setState(() => isLoading = true);
 
-    setState(() {
-      usernameController.text = user;
-
-      displayName.text =
-          prefs.getString("displayName_$user") ?? "";
-
-      // ✅ LOAD ENROLLMENT
-      enrollment.text =
-          prefs.getString("enrollment_$user") ?? "";
-
-      age.text = prefs.getString("age_$user") ?? "";
-      year.text = prefs.getString("year_$user") ?? "";
-      branch.text = prefs.getString("branch_$user") ?? "";
-      sem.text = prefs.getString("sem_$user") ?? "";
-      phone.text = prefs.getString("phone_$user") ?? "";
-      email.text = prefs.getString("email_$user") ?? "";
-
-      imagePath = prefs.getString("profilePic_$user");
-    });
+    try {
+      final data = await FirestoreService.getUser(uid);
+      if (data != null && mounted) {
+        setState(() {
+          displayName.text = data['displayName'] ?? '';
+          usernameController.text = data['username'] ?? '';
+          emailController.text = data['email'] ?? '';
+          enrollment.text = data['enrollmentNo'] ?? '';
+          age.text = data['age'] ?? '';
+          year.text = data['year'] ?? '';
+          branch.text = data['branch'] ?? '';
+          sem.text = data['semester'] ?? '';
+          phone.text = data['phone'] ?? '';
+          profilePicUrl = data['profilePicUrl'];
+        });
+      }
+    } catch (e) {
+      if (mounted) _msg("Error loading profile: $e");
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   Future pickImage() async {
@@ -71,88 +77,77 @@ class _ProfilePageState extends State<ProfilePage> {
     if (img == null) return;
 
     setState(() {
-      imagePath = img.path;
+      newImage = File(img.path);
     });
   }
 
   Future saveProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    String user = widget.username;
+    setState(() => isSaving = true);
 
-    await prefs.setString("displayName_$user", displayName.text);
+    try {
+      String? picUrl = profilePicUrl;
 
-    // ✅ SAVE ENROLLMENT
-    await prefs.setString("enrollment_$user", enrollment.text);
+      // Upload new profile pic if selected
+      if (newImage != null) {
+        picUrl = await StorageService.uploadProfilePic(newImage!, uid);
+      }
 
-    await prefs.setString("age_$user", age.text);
-    await prefs.setString("year_$user", year.text);
-    await prefs.setString("branch_$user", branch.text);
-    await prefs.setString("sem_$user", sem.text);
-    await prefs.setString("phone_$user", phone.text);
-    await prefs.setString("email_$user", email.text);
+      await FirestoreService.updateUser(uid, {
+        'displayName': displayName.text.trim(),
+        'enrollmentNo': enrollment.text.trim(),
+        'age': age.text.trim(),
+        'year': year.text.trim(),
+        'branch': branch.text.trim(),
+        'semester': sem.text.trim(),
+        'phone': phone.text.trim(),
+        'profilePicUrl': picUrl,
+      });
 
-    if (imagePath != null) {
-      await prefs.setString("profilePic_$user", imagePath!);
+      if (mounted) _msg("Profile Saved");
+    } catch (e) {
+      if (mounted) _msg("Error saving: $e");
+    } finally {
+      if (mounted) setState(() => isSaving = false);
     }
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text("Profile Saved")));
   }
 
   Future changePassword() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final usersData = prefs.getStringList("users") ?? [];
-
-    final users = usersData
-        .map((e) => UserModel.fromJson(jsonDecode(e)))
-        .toList();
-
-    int index = users.indexWhere((u) => u.username == widget.username);
-
-    if (index == -1) {
-      _msg("User not found");
+    if (oldPass.text.trim().isEmpty || newPass.text.trim().isEmpty) {
+      _msg("Fill both password fields");
       return;
     }
 
-    if (users[index].password != oldPass.text.trim()) {
-      _msg("Old password incorrect");
+    if (newPass.text.trim().length < 6) {
+      _msg("New password must be at least 6 characters");
       return;
     }
 
-    if (newPass.text.trim().length < 4) {
-      _msg("Password too short");
-      return;
+    try {
+      await AuthService.changePassword(
+        oldPassword: oldPass.text.trim(),
+        newPassword: newPass.text.trim(),
+      );
+
+      oldPass.clear();
+      newPass.clear();
+      _msg("Password updated successfully");
+    } on FirebaseAuthException catch (e) {
+      _msg(e.message ?? "Error changing password");
+    } catch (e) {
+      _msg("Error: $e");
     }
-
-    users[index] = UserModel(
-      username: users[index].username,
-      password: newPass.text.trim(),
-    );
-
-    await prefs.setStringList(
-      "users",
-      users.map((u) => jsonEncode(u.toJson())).toList(),
-    );
-
-    oldPass.clear();
-    newPass.clear();
-
-    _msg("Password updated successfully");
   }
 
   Future logout() async {
-    final prefs = await SharedPreferences.getInstance();
+    await AuthService.signOut();
 
-    await prefs.setBool("isLoggedIn", false); // ✅ FIX
-    await prefs.remove("currentUser");
-    await prefs.remove("role");
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-          (route) => false,
-    );
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+            (route) => false,
+      );
+    }
   }
 
   void _msg(String msg) {
@@ -185,6 +180,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F8),
 
@@ -202,16 +203,19 @@ class _ProfilePageState extends State<ProfilePage> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Color(0xFF4A6CF7),
+                  color: const Color(0xFF4A6CF7),
                   width: 3,
                 ),
               ),
               child: CircleAvatar(
                 radius: 50,
                 backgroundColor: Colors.grey[200],
-                backgroundImage:
-                imagePath != null ? FileImage(File(imagePath!)) : null,
-                child: imagePath == null
+                backgroundImage: newImage != null
+                    ? FileImage(newImage!)
+                    : (profilePicUrl != null
+                        ? CachedNetworkImageProvider(profilePicUrl!)
+                        : null) as ImageProvider?,
+                child: (newImage == null && profilePicUrl == null)
                     ? const Icon(Icons.camera_alt, size: 28)
                     : null,
               ),
@@ -228,16 +232,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   field("Display Name", displayName, Icons.person),
                   readOnlyField("Username", usernameController),
+                  readOnlyField("Email", emailController),
 
-                  // ✅ NEW FIELD ADDED
                   field("Enrollment No.", enrollment, Icons.badge),
-
                   field("Age", age, Icons.cake),
                   field("Year", year, Icons.school),
                   field("Branch", branch, Icons.account_tree),
                   field("Sem", sem, Icons.confirmation_number),
                   field("Phone", phone, Icons.phone),
-                  field("Email", email, Icons.email),
 
                   const SizedBox(height: 20),
 
@@ -257,15 +259,29 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   ElevatedButton(
                     style: btnStyle(),
-                    onPressed: saveProfile,
-                    child: const Text("Save",
-                        style: TextStyle(color: Colors.white)),
+                    onPressed: isSaving ? null : saveProfile,
+                    child: isSaving
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text("Save",
+                            style: TextStyle(color: Colors.white)),
                   ),
 
                   const SizedBox(height: 10),
 
                   ElevatedButton(
-                    style: btnStyle(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
                     onPressed: logout,
                     child: const Text("Logout",
                         style: TextStyle(color: Colors.white)),
@@ -279,7 +295,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget field(String hint, controller, IconData icon) {
+  Widget field(String hint, TextEditingController controller, IconData icon) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -292,7 +308,7 @@ class _ProfilePageState extends State<ProfilePage> {
       child: TextField(
         controller: controller,
         decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Color(0xFF4A6CF7)),
+          prefixIcon: Icon(icon, color: const Color(0xFF4A6CF7)),
           hintText: hint,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(14),
@@ -301,7 +317,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget readOnlyField(String hint, controller) {
+  Widget readOnlyField(String hint, TextEditingController controller) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

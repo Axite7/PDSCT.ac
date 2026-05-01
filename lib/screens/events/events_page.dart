@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
-import 'package:college_app/screens/events/event_data.dart';
+import 'package:college_app/models/event_model.dart';
 import 'package:college_app/screens/events/add_event_page.dart';
 import 'package:college_app/screens/events/event_detail_page.dart';
+import 'package:college_app/services/auth_service.dart';
+import 'package:college_app/services/firestore_service.dart';
+import 'package:college_app/services/storage_service.dart';
 
 class EventsPage extends StatefulWidget {
   const EventsPage({super.key});
@@ -15,25 +18,30 @@ class EventsPage extends StatefulWidget {
 
 class _EventsPageState extends State<EventsPage> {
 
-  String role = "user"; // 🔥 ADDED
+  String role = "user";
 
   @override
   void initState() {
     super.initState();
-
-    loadRole(); // 🔥 ADDED
-
-    loadEvents().then((_) {
-      setState(() {});
-    });
+    loadRole();
   }
 
-  // 🔥 ADDED
   Future<void> loadRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      role = prefs.getString("role") ?? "user";
-    });
+    final r = await AuthService.getUserRole();
+    if (mounted) {
+      setState(() {
+        role = r;
+      });
+    }
+  }
+
+  Future<void> _deleteEvent(EventModel event) async {
+    // Delete image from storage
+    if (event.imageUrl.isNotEmpty) {
+      await StorageService.deleteFileByUrl(event.imageUrl);
+    }
+    // Delete event from Firestore
+    await FirestoreService.deleteEvent(event.id);
   }
 
   Widget buildHeader(String title) {
@@ -81,110 +89,128 @@ class _EventsPageState extends State<EventsPage> {
           buildHeader("Events"),
 
           Expanded(
-            child: events.isEmpty
-                ? const Center(child: Text("No Events Yet"))
-                : ListView.builder(
-              itemCount: events.length,
-              itemBuilder: (context, index) {
-                final event = events[index];
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirestoreService.streamEvents(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            EventDetailPage(event: event),
+                final docs = snapshot.data?.docs ?? [];
+
+                if (docs.isEmpty) {
+                  return const Center(child: Text("No Events Yet"));
+                }
+
+                return ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final event = EventModel.fromFirestore(docs[index]);
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                EventDetailPage(event: event),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF4A6CF7).withOpacity(0.9),
+                              const Color(0xFF6C63FF)
+                            ],
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+
+                            ClipRRect(
+                              borderRadius:
+                              const BorderRadius.vertical(
+                                  top: Radius.circular(20)),
+                              child: CachedNetworkImage(
+                                imageUrl: event.imageUrl,
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) =>
+                                    const SizedBox(
+                                      height: 180,
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    ),
+                                errorWidget: (context, url, error) =>
+                                    const SizedBox(
+                                      height: 180,
+                                      child: Center(
+                                        child: Icon(Icons.broken_image,
+                                            color: Colors.white54, size: 50),
+                                      ),
+                                    ),
+                              ),
+                            ),
+
+                            Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+
+                                  Text(event.title,
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight:
+                                          FontWeight.bold)),
+
+                                  const SizedBox(height: 6),
+
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                          Icons.calendar_month,
+                                          color: Colors.white,
+                                          size: 18),
+                                      const SizedBox(width: 6),
+                                      Text(event.formattedDate,
+                                          style: const TextStyle(
+                                              color: Colors.white)),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 10),
+
+                                  Align(
+                                    alignment:
+                                    Alignment.centerRight,
+                                    child: (role == "admin" || role == "root")
+                                        ? IconButton(
+                                      icon: const Icon(
+                                          Icons.delete,
+                                          color: Colors.white),
+                                      onPressed: () async {
+                                        await _deleteEvent(event);
+                                      },
+                                    )
+                                        : const SizedBox(),
+                                  )
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
                       ),
                     );
                   },
-                  child: Container(
-                    margin: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        colors: [
-                          Color(0xFF4A6CF7).withOpacity(0.9),
-                          Color(0xFF6C63FF)
-                        ],
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-
-                        ClipRRect(
-                          borderRadius:
-                          const BorderRadius.vertical(
-                              top: Radius.circular(20)),
-                          child: Image.file(
-                            File(event.image),
-                            height: 180,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-
-                        Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Column(
-                            crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                            children: [
-
-                              Text(event.title,
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight:
-                                      FontWeight.bold)),
-
-                              const SizedBox(height: 6),
-
-                              Row(
-                                children: [
-                                  const Icon(
-                                      Icons.calendar_month,
-                                      color: Colors.white,
-                                      size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(event.date,
-                                      style: const TextStyle(
-                                          color: Colors.white)),
-                                ],
-                              ),
-
-                              const SizedBox(height: 10),
-
-                              Align(
-                                alignment:
-                                Alignment.centerRight,
-
-                                // 🔥 DELETE BUTTON HIDE FOR USER
-                                child: (role == "admin" || role == "root")
-                                    ? IconButton(
-                                  icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.white),
-                                  onPressed: () async {
-
-                                    // 🔒 SAFETY CHECK
-                                    if (role == "user") return;
-
-                                    setState(() {
-                                      events.removeAt(index);
-                                    });
-
-                                    await saveEvents();
-                                  },
-                                )
-                                    : const SizedBox(),
-                              )
-                            ],
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
@@ -192,24 +218,16 @@ class _EventsPageState extends State<EventsPage> {
         ],
       ),
 
-      // 🔥 FAB HIDE FOR USER
       floatingActionButton:
       (role == "admin" || role == "root")
           ? FloatingActionButton(
         backgroundColor: const Color(0xFF4A6CF7),
         child: const Icon(Icons.add),
         onPressed: () async {
-
-          // 🔒 SAFETY CHECK
-          if (role == "user") return;
-
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => AddEventPage()),
+            MaterialPageRoute(builder: (_) => const AddEventPage()),
           );
-
-          await loadEvents();
-          setState(() {});
         },
       )
           : null,
