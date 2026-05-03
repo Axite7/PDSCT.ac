@@ -9,6 +9,8 @@ import 'package:college_app/screens/events/events_page.dart';
 import 'package:college_app/screens/notes/notes_page.dart';
 import 'package:college_app/screens/attendance/attendance_page.dart';
 import 'package:college_app/screens/timetable/timetable_page.dart';
+import 'package:college_app/models/user_role.dart';
+import 'package:college_app/screens/attendance/admin_attendance_year_page.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -264,24 +266,40 @@ class _HomeScreenState extends State<HomeScreen>
   Widget buildCard(BuildContext context, String title, String subtitle,
       IconData icon, Color color) {
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+
         if (title == "Events") {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const EventsPage()),
           );
+
         } else if (title == "Notes") {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const NotesPage()),
           );
+
         } else if (title == "Attendance") {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AttendancePage(username: username),
-            ),
-          );
+
+          final role = await UserRole.getRole(username);
+
+          if (role == "admin" || role == "root") {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const AdminAttendanceYearPage(),
+              ),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AttendancePage(username: username),
+              ),
+            );
+          }
+
         } else if (title == "Timetable") {
           Navigator.push(
             context,
@@ -289,6 +307,7 @@ class _HomeScreenState extends State<HomeScreen>
           );
         }
       },
+
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         padding: const EdgeInsets.all(18),
@@ -303,6 +322,7 @@ class _HomeScreenState extends State<HomeScreen>
             )
           ],
         ),
+
         child: Row(
           children: [
             Container(
@@ -313,14 +333,17 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               child: Icon(icon, color: color, size: 26),
             ),
+
             const SizedBox(width: 16),
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
                       style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text(subtitle,
                       style: TextStyle(color: Colors.grey[600])),
@@ -333,66 +356,66 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget bottomBanner() {
-    return ClipPath(
-      clipper: BottomCurveClipper(),
-      child: Container(
-        width: double.infinity,
-        height: 300,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF4A6CF7), Color(0xFF6A8CFF)],
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            CircleAvatar(
-              radius: 45,
-              backgroundImage: AssetImage("assets/logo.png"),
-            ),
-            SizedBox(height: 15),
-            Text(
-              "PDSCT",
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 5),
-            Text(
-              "WELCOMES YOU",
-              style:
-              TextStyle(color: Colors.white70, letterSpacing: 2),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+Widget bottomBanner() {
+return ClipPath(
+clipper: BottomCurveClipper(),
+child: Container(
+width: double.infinity,
+height: 300,
+decoration: const BoxDecoration(
+gradient: LinearGradient(
+colors: [Color(0xFF4A6CF7), Color(0xFF6A8CFF)],
+),
+),
+child: Column(
+mainAxisAlignment: MainAxisAlignment.center,
+children: const [
+CircleAvatar(
+radius: 45,
+backgroundImage: AssetImage("assets/logo.png"),
+),
+SizedBox(height: 15),
+Text(
+"PDSCT",
+style: TextStyle(
+color: Colors.white,
+fontSize: 32,
+fontWeight: FontWeight.bold),
+),
+SizedBox(height: 5),
+Text(
+"WELCOMES YOU",
+style:
+TextStyle(color: Colors.white70, letterSpacing: 2),
+),
+],
+),
+),
+);
+}
 }
 
 class BottomCurveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    Path path = Path();
+@override
+Path getClip(Size size) {
+Path path = Path();
 
-    path.lineTo(0, 100);
+path.lineTo(0, 100);
 
-    path.quadraticBezierTo(
-      size.width / 2,
-      -40,
-      size.width,
-      100,
-    );
+path.quadraticBezierTo(
+size.width / 2,
+-40,
+size.width,
+100,
+);
 
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
+path.lineTo(size.width, size.height);
+path.lineTo(0, size.height);
 
-    path.close();
-    return path;
-  }
+path.close();
+return path;
+}
 
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+@override
+bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

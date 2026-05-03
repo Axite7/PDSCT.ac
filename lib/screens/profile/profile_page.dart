@@ -18,15 +18,20 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
 
+  final branchMap = {
+    "CSE": "Computer Science Engineering",
+    "IT": "Information Technology",
+    "ME": "Mechanical Engineering",
+    "CE": "Civil Engineering",
+    "EC": "Electronics & Communication",
+    "EE": "Electrical Engineering",
+  };
+
   final displayName = TextEditingController();
   final usernameController = TextEditingController();
 
-  final enrollment = TextEditingController(); // ✅ NEW FIELD
-
+  final enrollment = TextEditingController();
   final age = TextEditingController();
-  final year = TextEditingController();
-  final branch = TextEditingController();
-  final sem = TextEditingController();
   final phone = TextEditingController();
   final email = TextEditingController();
 
@@ -34,6 +39,24 @@ class _ProfilePageState extends State<ProfilePage> {
   final newPass = TextEditingController();
 
   String? imagePath;
+
+  // 🔥 UPDATED DROPDOWN VALUES
+  String? selectedYear;
+  String? selectedBranch;
+  String? selectedSem;
+
+  final years = ["1st", "2nd", "3rd", "4th"];
+
+  final branches = [
+    "CSE",
+    "IT",
+    "ME",
+    "CE",
+    "EC",
+    "EE",
+  ];
+
+  final sems = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
   @override
   void initState() {
@@ -45,20 +68,28 @@ class _ProfilePageState extends State<ProfilePage> {
     final prefs = await SharedPreferences.getInstance();
     String user = widget.username;
 
+    String? savedYear = prefs.getString("year_$user");
+    String? savedBranch = prefs.getString("branch_$user");
+    String? savedSem = prefs.getString("sem_$user");
+
     setState(() {
       usernameController.text = user;
 
       displayName.text =
           prefs.getString("displayName_$user") ?? "";
 
-      // ✅ LOAD ENROLLMENT
       enrollment.text =
           prefs.getString("enrollment_$user") ?? "";
 
       age.text = prefs.getString("age_$user") ?? "";
-      year.text = prefs.getString("year_$user") ?? "";
-      branch.text = prefs.getString("branch_$user") ?? "";
-      sem.text = prefs.getString("sem_$user") ?? "";
+
+      // 🔥 SAFE LOAD (CRASH FIX)
+      selectedYear = years.contains(savedYear) ? savedYear : null;
+      selectedBranch = branchMap.containsKey(savedBranch)
+          ? savedBranch
+          : null;
+      selectedSem = sems.contains(savedSem) ? savedSem : null;
+
       phone.text = prefs.getString("phone_$user") ?? "";
       email.text = prefs.getString("email_$user") ?? "";
 
@@ -80,14 +111,18 @@ class _ProfilePageState extends State<ProfilePage> {
     String user = widget.username;
 
     await prefs.setString("displayName_$user", displayName.text);
-
-    // ✅ SAVE ENROLLMENT
     await prefs.setString("enrollment_$user", enrollment.text);
-
     await prefs.setString("age_$user", age.text);
-    await prefs.setString("year_$user", year.text);
-    await prefs.setString("branch_$user", branch.text);
-    await prefs.setString("sem_$user", sem.text);
+
+    // 🔥 STANDARDIZED SAVE
+    await prefs.setString("year_$user", selectedYear ?? "");
+    await prefs.setString("branch_$user", selectedBranch ?? "");
+    await prefs.setString(
+      "branchFull_$user",
+      branchMap[selectedBranch] ?? "",
+    );
+    await prefs.setString("sem_$user", selectedSem ?? "");
+
     await prefs.setString("phone_$user", phone.text);
     await prefs.setString("email_$user", email.text);
 
@@ -144,7 +179,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future logout() async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setBool("isLoggedIn", false); // ✅ FIX
+    await prefs.setBool("isLoggedIn", false);
     await prefs.remove("currentUser");
     await prefs.remove("role");
 
@@ -179,6 +214,34 @@ class _ProfilePageState extends State<ProfilePage> {
           const Text("Profile",
               style: TextStyle(color: Colors.white, fontSize: 22)),
         ],
+      ),
+    );
+  }
+
+  Widget dropdown(String hint, String? value, List<String> items,
+      Function(String?) onChanged) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6)
+        ],
+      ),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        items: items
+            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+            .toList(),
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          prefixIcon:
+          const Icon(Icons.school, color: Color(0xFF4A6CF7)),
+          hintText: hint,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(14),
+        ),
       ),
     );
   }
@@ -229,13 +292,18 @@ class _ProfilePageState extends State<ProfilePage> {
                   field("Display Name", displayName, Icons.person),
                   readOnlyField("Username", usernameController),
 
-                  // ✅ NEW FIELD ADDED
                   field("Enrollment No.", enrollment, Icons.badge),
-
                   field("Age", age, Icons.cake),
-                  field("Year", year, Icons.school),
-                  field("Branch", branch, Icons.account_tree),
-                  field("Sem", sem, Icons.confirmation_number),
+
+                  dropdown("Year", selectedYear, years,
+                          (v) => setState(() => selectedYear = v)),
+
+                  dropdown("Branch", selectedBranch, branches,
+                          (v) => setState(() => selectedBranch = v)),
+
+                  dropdown("Sem", selectedSem, sems,
+                          (v) => setState(() => selectedSem = v)),
+
                   field("Phone", phone, Icons.phone),
                   field("Email", email, Icons.email),
 

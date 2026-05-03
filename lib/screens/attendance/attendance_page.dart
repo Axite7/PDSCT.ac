@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:college_app/models/user_role.dart';
+import 'package:college_app/services/attendance_service.dart';
+import 'package:college_app/screens/attendance/today_attendance_page.dart';
 
 class AttendancePage extends StatefulWidget {
   final String username;
@@ -15,57 +19,135 @@ class AttendancePage extends StatefulWidget {
 
 class _AttendancePageState extends State<AttendancePage> {
 
+  bool isRoleLoaded = false;
   DateTime focusedDay = DateTime.now();
-  DateTime? selectedDay;
+  DateTime selectedDay = DateTime.now();
 
-  Set<DateTime> presentDays = {};
-  Set<DateTime> holidays = {};
+  Map<DateTime, String> attendanceMap = {};
+
+  String role = "user";
 
   DateTime norm(DateTime d) => DateTime(d.year, d.month, d.day);
 
   @override
   void initState() {
     super.initState();
-    fetchHolidays(DateTime.now().year);
+    loadAttendance();
+    loadRole();
   }
 
-  // 🔥 OPTIONAL API (ignore if fails)
-  Future fetchHolidays(int year) async {
-    try {
-      final url =
-          "https://date.nager.at/api/v3/PublicHolidays/$year/IN";
+  Future loadRole() async {
+    final r = await UserRole.getRole(widget.username);
 
-      final res = await http.get(Uri.parse(url));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-
-        setState(() {
-          holidays = data.map<DateTime>((h) {
-            final d = DateTime.parse(h["date"]);
-            return norm(d);
-          }).toSet();
-        });
-      }
-    } catch (e) {
-      print("Holiday API failed");
-    }
-  }
-
-  Future markAttendance() async {
-    if (selectedDay == null) return;
-
-    final image = await ImagePicker().pickImage(source: ImageSource.camera);
-    if (image == null) return;
+    print("USERNAME: ${widget.username}");
+    print("ROLE: $r");
 
     setState(() {
-      presentDays.add(norm(selectedDay!));
+      role = r;
+      isRoleLoaded = true;
     });
   }
 
+  Future loadAttendance() async {
+    final data =
+    await AttendanceService.getUserAttendance(widget.username);
+
+    Map<DateTime, String> map = {};
+
+    for (var e in data) {
+      final d = norm(DateTime.parse(e["date"]));
+      map[d] = e["status"];
+    }
+
+    setState(() {
+      attendanceMap = map;
+    });
+  }
+
+  // 🔥 LOCATION
+  Future<String> getLocation() async {
+
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
+      return "Disabled";
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
+      return "Denied";
+    }
+
+    final pos = await Geolocator.getCurrentPosition();
+    return "${pos.latitude},${pos.longitude}";
+  }
+
+  // 🔥 MARK ATTENDANCE
+  Future markAttendance() async {
+
+    final today = norm(DateTime.now());
+
+    if (norm(selectedDay) != today) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Only today's attendance allowed")),
+      );
+      return;
+    }
+
+    final image =
+    await ImagePicker().pickImage(source: ImageSource.camera);
+    if (image == null) return;
+
+    final location = await getLocation();
+
+    await AttendanceService.markAttendance(
+      username: widget.username,
+      date: today.toIso8601String(),
+      image: image.path,
+      location: location,
+    );
+
+    // 🔥 ADD TIME MANUALLY
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+
+    final time =
+        "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
+
+    final data = prefs.getString("attendance_data");
+    Map all = data != null ? jsonDecode(data) : {};
+
+    final userKey =
+        "${widget.username}_${prefs.getString("year_${widget.username}")}_${prefs.getString("branch_${widget.username}")}";
+
+    List list = all[userKey] ?? [];
+
+    for (var e in list) {
+      if (e["date"] == today.toIso8601String()) {
+        e["time"] = time;
+      }
+    }
+
+    all[userKey] = list;
+    await prefs.setString("attendance_data", jsonEncode(all));
+
+    await loadAttendance();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Attendance marked")),
+    );
+  }
+
+  // 🔵 HEADER
   Widget header() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 45, 16, 25),
+      padding: const EdgeInsets.fromLTRB(16, 50, 16, 25),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF4A6CF7), Color(0xFF6A8DFF)],
@@ -79,131 +161,54 @@ class _AttendancePageState extends State<AttendancePage> {
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          const Text("Attendance",
-              style: TextStyle(color: Colors.white, fontSize: 22)),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final today = norm(DateTime.now());
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF2F4F8),
-
-      body: Column(
-        children: [
-
-          header(),
-
-          const SizedBox(height: 10),
-
-          TableCalendar(
-            firstDay: DateTime.utc(2020),
-            lastDay: DateTime.utc(2030),
-            focusedDay: focusedDay,
-
-            calendarFormat: CalendarFormat.month,
-
-            headerStyle: const HeaderStyle(
-              formatButtonVisible: false,
-              titleCentered: true,
-            ),
-
-            selectedDayPredicate: (day) =>
-            selectedDay != null && norm(day) == selectedDay,
-
-            onDaySelected: (selected, focused) {
-              setState(() {
-                selectedDay = norm(selected);
-                focusedDay = focused;
-              });
-            },
-
-            onPageChanged: (focused) {
-              focusedDay = focused;
-              fetchHolidays(focused.year);
-            },
-
-            calendarBuilders: CalendarBuilders(
-
-              // 🔵 TODAY
-              todayBuilder: (context, day, _) {
-                final d = norm(day);
-                bool isPresent = presentDays.contains(d);
-
-                return buildCircle(
-                  day,
-                  isPresent ? Colors.green : Colors.transparent,
-                  border: Border.all(
-                    color: Color(0xFF4A6CF7),
-                    width: 2,
-                  ),
-                );
-              },
-
-              // 🟡 SELECTED
-              selectedBuilder: (context, day, _) {
-                return buildCircle(
-                  day,
-                  Color(0xFF4A6CF7).withOpacity(0.3),
-                );
-              },
-
-              // 🔥 DEFAULT
-              defaultBuilder: (context, day, _) {
-                final d = norm(day);
-
-                bool isPresent = presentDays.contains(d);
-
-                // 🔥 SUNDAY CHECK
-                bool isSunday = day.weekday == DateTime.sunday;
-
-                // 🔥 API HOLIDAY CHECK
-                bool isHoliday = holidays.any((h) =>
-                h.year == d.year &&
-                    h.month == d.month &&
-                    h.day == d.day);
-
-                Color bg = Colors.transparent;
-
-                if (isPresent) {
-                  bg = Colors.green;
-                } else if (isHoliday || isSunday) {
-                  bg = Colors.red;
-                }
-
-                return buildCircle(day, bg);
-              },
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF4A6CF7),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-            ),
-            onPressed: markAttendance,
-            child: const Text("Mark Attendance",
-                style: TextStyle(color: Colors.white)),
+          const Text(
+            "Attendance",
+            style: TextStyle(color: Colors.white, fontSize: 22),
           ),
         ],
       ),
     );
   }
 
-  Widget buildCircle(DateTime day, Color bg, {Border? border}) {
+  // 🔥 DAY UI FIXED
+  Widget buildDay(DateTime day,
+      {bool isToday = false, bool isSelected = false}) {
+
+    final d = norm(day);
+    String? status = attendanceMap[d];
+
+    bool isSunday = day.weekday == DateTime.sunday;
+
+    Color bg = Colors.transparent;
+
+    if (status == "present") {
+      bg = Colors.green;
+    } else if (status == "rejected") {
+      bg = Colors.purple;
+    } else if (isSunday) {
+      bg = Colors.red; // 🔥 SUNDAY COLOR
+    }
+
     return Container(
       margin: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: bg,
         shape: BoxShape.circle,
-        border: border,
+
+        border: isToday
+            ? Border.all(
+            color: const Color(0xFF4A6CF7), width: 2)
+            : null,
+
+        boxShadow: isSelected
+            ? [
+          BoxShadow(
+            color: const Color(0xFF4A6CF7).withOpacity(0.4),
+            blurRadius: 8,
+            spreadRadius: 2,
+          )
+        ]
+            : [],
       ),
       child: Center(
         child: Text(
@@ -214,6 +219,110 @@ class _AttendancePageState extends State<AttendancePage> {
                 : Colors.white,
             fontWeight: FontWeight.bold,
           ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FF),
+
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+
+            header(),
+
+            TableCalendar(
+              firstDay: DateTime.utc(2020),
+              lastDay: DateTime.utc(2030),
+              focusedDay: focusedDay,
+
+              selectedDayPredicate: (day) =>
+              norm(day) == norm(selectedDay),
+
+              onDaySelected: (selected, focused) {
+                setState(() {
+                  selectedDay = selected;
+                  focusedDay = focused;
+                });
+              },
+
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+
+              calendarBuilders: CalendarBuilders(
+
+                dowBuilder: (context, day) {
+                  if (day.weekday == DateTime.sunday) {
+                    return const Center(
+                      child: Text(
+                        "Sun",
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    );
+                  }
+                  return null;
+                },
+
+                defaultBuilder: (context, day, _) =>
+                    buildDay(day),
+
+                todayBuilder: (context, day, _) =>
+                    buildDay(day, isToday: true),
+
+                selectedBuilder: (context, day, _) =>
+                    buildDay(day, isSelected: true),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A6CF7),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 40, vertical: 14),
+              ),
+              onPressed: markAttendance,
+              child: const Text(
+                "Mark Attendance",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // 🔥 ADMIN BUTTON
+            if (isRoleLoaded && (role == "admin" || role == "root"))
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 40, vertical: 14),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const TodayAttendancePage(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  "View Today's Attendance",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+
+            const SizedBox(height: 10),
+          ],
         ),
       ),
     );
