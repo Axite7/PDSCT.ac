@@ -3,9 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import 'signup_page.dart';
-import '../../models/user_model.dart';
-import '../home/home_page.dart';
-import '../../models/user_role.dart';
+import 'package:college_app/models/user_model.dart';
+import 'package:college_app/screens/home/home_page.dart';
+import 'package:college_app/models/user_role.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});

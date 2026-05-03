@@ -6,7 +6,6 @@ class BranchPage extends StatelessWidget {
 
   const BranchPage({super.key, required this.year});
 
-  // 🔵 HEADER
   Widget buildHeader(BuildContext context, String title) {
     return Container(
       width: double.infinity,
@@ -46,22 +45,24 @@ class BranchPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
 
-    // 🔥 FULL FORM BRANCHES
+    // 🔥 UPDATED BRANCHES (WITH EE)
     final branches = [
       {"short": "CSE", "full": "Computer Science Engineering"},
       {"short": "IT", "full": "Information Technology"},
       {"short": "ME", "full": "Mechanical Engineering"},
       {"short": "CE", "full": "Civil Engineering"},
       {"short": "EC", "full": "Electronics & Communication"},
+      {"short": "EE", "full": "Electrical Engineering"}, // 🔥 NEW
     ];
 
-    // 🔥 SAME COLORS AS SUBJECTS
+    // 🔥 COLOR SYSTEM (MATCH YOUR UI)
     final colors = [
       Colors.blue,
       Colors.green,
       Colors.red,
       Colors.orange,
       Colors.deepPurple,
+      Colors.teal, // 🔥 EE color
     ];
 
     return Scaffold(
@@ -87,7 +88,7 @@ class BranchPage extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => SubjectsPage(
-                          branch: branch["short"]!,
+                          branch: branch["short"]!, // 🔥 IMPORTANT
                           year: year,
                         ),
                       ),
