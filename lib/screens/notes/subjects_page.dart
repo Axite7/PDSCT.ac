@@ -99,7 +99,7 @@ class SubjectsPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: color.withOpacity(0.35),
+                          color: color.withValues(alpha: 0.35),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         )

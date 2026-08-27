@@ -69,6 +69,7 @@ class _SignupPageState extends State<SignupPage> {
       await prefs.setString("profilePic_$username", image!.path);
     }
 
+    if (!mounted) return;
     _showMessage("Account created successfully");
     Navigator.pop(context);
   }

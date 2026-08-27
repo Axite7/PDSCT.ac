@@ -81,7 +81,7 @@ class AdminAttendanceYearPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.deepPurple.withOpacity(0.4),
+                      color: Colors.deepPurple.withValues(alpha: 0.4),
                       blurRadius: 10,
                       offset: const Offset(0, 6),
                     )
@@ -131,7 +131,7 @@ class AdminAttendanceYearPage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
-                          color: color.withOpacity(0.3),
+                          color: color.withValues(alpha: 0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         )

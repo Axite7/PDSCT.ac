@@ -104,8 +104,8 @@ class _EventsPageState extends State<EventsPage> {
                       borderRadius: BorderRadius.circular(20),
                       gradient: LinearGradient(
                         colors: [
-                          Color(0xFF4A6CF7).withOpacity(0.9),
-                          Color(0xFF6C63FF)
+                          const Color(0xFF4A6CF7).withValues(alpha: 0.9),
+                          const Color(0xFF6C63FF),
                         ],
                       ),
                     ),
@@ -205,7 +205,7 @@ class _EventsPageState extends State<EventsPage> {
 
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => AddEventPage()),
+            MaterialPageRoute(builder: (_) => const AddEventPage()),
           );
 
           await loadEvents();

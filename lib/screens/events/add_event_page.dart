@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:college_app/screens/events/event_model.dart';
 import 'package:college_app/screens/events/event_data.dart';
 import 'package:college_app/services/notification_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AddEventPage extends StatefulWidget {
   const AddEventPage({super.key});
@@ -36,7 +35,9 @@ class _AddEventPageState extends State<AddEventPage> {
     if (titleController.text.isEmpty ||
         dateController.text.isEmpty ||
         descController.text.isEmpty ||
-        image == null) return;
+        image == null) {
+      return;
+    }
 
     final title = titleController.text;
 
@@ -49,16 +50,14 @@ class _AddEventPageState extends State<AddEventPage> {
 
     await saveEvents();
 
-    // ✅ NEW: Notification added
-    final prefs = await SharedPreferences.getInstance();
-    String currentUser = prefs.getString("currentUser") ?? "";
-
+    // ✅ Notification added
     await NotificationService.addNotification(
       username: "all",
       title: "New Event Added",
       message: "${titleController.text} event created",
     );
 
+    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -91,7 +90,7 @@ class _AddEventPageState extends State<AddEventPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Color(0xFF4A6CF7)),
+                  border: Border.all(color: const Color(0xFF4A6CF7)),
                 ),
                 child: image == null
                     ? const Center(
@@ -122,7 +121,7 @@ class _AddEventPageState extends State<AddEventPage> {
     );
   }
 
-  Widget _field(controller, hint) {
+  Widget _field(TextEditingController controller, String hint) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(

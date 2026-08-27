@@ -108,7 +108,7 @@ class _TodayAttendancePageState extends State<TodayAttendancePage> {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: gradient[0].withOpacity(0.3),
+              color: gradient[0].withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, 6),
             )

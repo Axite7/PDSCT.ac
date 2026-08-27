@@ -130,6 +130,7 @@ class _ProfilePageState extends State<ProfilePage> {
       await prefs.setString("profilePic_$user", imagePath!);
     }
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text("Profile Saved")));
   }
@@ -173,6 +174,7 @@ class _ProfilePageState extends State<ProfilePage> {
     oldPass.clear();
     newPass.clear();
 
+    if (!mounted) return;
     _msg("Password updated successfully");
   }
 
@@ -183,6 +185,7 @@ class _ProfilePageState extends State<ProfilePage> {
     await prefs.remove("currentUser");
     await prefs.remove("role");
 
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -230,7 +233,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
       child: DropdownButtonFormField<String>(
-        value: value,
+        initialValue: value,
         items: items
             .map((e) => DropdownMenuItem(value: e, child: Text(e)))
             .toList(),
@@ -265,7 +268,7 @@ class _ProfilePageState extends State<ProfilePage> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Color(0xFF4A6CF7),
+                  color: const Color(0xFF4A6CF7),
                   width: 3,
                 ),
               ),
@@ -347,7 +350,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget field(String hint, controller, IconData icon) {
+  Widget field(String hint, TextEditingController controller, IconData icon) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -360,7 +363,7 @@ class _ProfilePageState extends State<ProfilePage> {
       child: TextField(
         controller: controller,
         decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Color(0xFF4A6CF7)),
+          prefixIcon: Icon(icon, color: const Color(0xFF4A6CF7)),
           hintText: hint,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(14),
@@ -369,7 +372,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget readOnlyField(String hint, controller) {
+  Widget readOnlyField(String hint, TextEditingController controller) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

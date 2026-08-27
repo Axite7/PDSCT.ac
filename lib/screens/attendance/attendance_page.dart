@@ -39,9 +39,10 @@ class _AttendancePageState extends State<AttendancePage> {
   Future loadRole() async {
     final r = await UserRole.getRole(widget.username);
 
-    print("USERNAME: ${widget.username}");
-    print("ROLE: $r");
+    debugPrint("USERNAME: ${widget.username}");
+    debugPrint("ROLE: $r");
 
+    if (!mounted) return;
     setState(() {
       role = r;
       isRoleLoaded = true;
@@ -139,6 +140,7 @@ class _AttendancePageState extends State<AttendancePage> {
 
     await loadAttendance();
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Attendance marked")),
     );
@@ -203,7 +205,7 @@ class _AttendancePageState extends State<AttendancePage> {
         boxShadow: isSelected
             ? [
           BoxShadow(
-            color: const Color(0xFF4A6CF7).withOpacity(0.4),
+            color: const Color(0xFF4A6CF7).withValues(alpha: 0.4),
             blurRadius: 8,
             spreadRadius: 2,
           )

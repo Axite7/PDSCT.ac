@@ -284,6 +284,7 @@ class _HomeScreenState extends State<HomeScreen>
 
           final role = await UserRole.getRole(username);
 
+          if (!context.mounted) return;
           if (role == "admin" || role == "root") {
             Navigator.push(
               context,
@@ -328,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen>
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(icon, color: color, size: 26),

@@ -169,7 +169,7 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: gradient[0].withOpacity(0.35),
+              color: gradient[0].withValues(alpha: 0.35),
               blurRadius: 12,
               offset: const Offset(0, 6),
             )

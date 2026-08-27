@@ -38,6 +38,7 @@ class _LoginPageState extends State<LoginPage> {
       // ✅ FIX
       await prefs.setBool("isLoggedIn", true);
 
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -74,6 +75,7 @@ class _LoginPageState extends State<LoginPage> {
     // ✅ FIX
     await prefs.setBool("isLoggedIn", true);
 
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(

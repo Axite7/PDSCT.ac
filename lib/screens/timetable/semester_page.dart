@@ -57,7 +57,7 @@ class SemesterPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(25),
             boxShadow: [
               BoxShadow(
-                color: colors.first.withOpacity(0.5),
+                color: colors.first.withValues(alpha: 0.5),
                 blurRadius: 12,
               )
             ],
@@ -69,7 +69,7 @@ class SemesterPage extends StatelessWidget {
                 top: -20,
                 child: Icon(icon,
                     size: 120,
-                    color: Colors.white.withOpacity(0.15)),
+                    color: Colors.white.withValues(alpha: 0.15)),
               ),
               Center(
                 child: Column(
