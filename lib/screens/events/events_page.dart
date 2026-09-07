@@ -29,6 +29,7 @@ class _EventsPageState extends State<EventsPage> {
   }
 
   // 🔥 ADDED
+  // Fetches role from SharedPreferences to show/hide admin event controls
   Future<void> loadRole() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -80,6 +81,7 @@ class _EventsPageState extends State<EventsPage> {
 
           buildHeader("Events"),
 
+          // List of current college events
           Expanded(
             child: events.isEmpty
                 ? const Center(child: Text("No Events Yet"))
@@ -90,6 +92,7 @@ class _EventsPageState extends State<EventsPage> {
 
                 return GestureDetector(
                   onTap: () {
+                    // Navigate to Event detail view
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -159,7 +162,7 @@ class _EventsPageState extends State<EventsPage> {
                                 alignment:
                                 Alignment.centerRight,
 
-                                // 🔥 DELETE BUTTON HIDE FOR USER
+                                // Only admins and root users can delete events
                                 child: (role == "admin" || role == "root")
                                     ? IconButton(
                                   icon: const Icon(
@@ -167,13 +170,13 @@ class _EventsPageState extends State<EventsPage> {
                                       color: Colors.white),
                                   onPressed: () async {
 
-                                    // 🔒 SAFETY CHECK
                                     if (role == "user") return;
 
                                     setState(() {
                                       events.removeAt(index);
                                     });
 
+                                    // Persist updated list to SharedPreferences
                                     await saveEvents();
                                   },
                                 )
@@ -192,7 +195,7 @@ class _EventsPageState extends State<EventsPage> {
         ],
       ),
 
-      // 🔥 FAB HIDE FOR USER
+      // Only admins and root users can see the Add Event FloatingActionButton
       floatingActionButton:
       (role == "admin" || role == "root")
           ? FloatingActionButton(
@@ -200,7 +203,6 @@ class _EventsPageState extends State<EventsPage> {
         child: const Icon(Icons.add),
         onPressed: () async {
 
-          // 🔒 SAFETY CHECK
           if (role == "user") return;
 
           await Navigator.push(

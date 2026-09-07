@@ -31,6 +31,7 @@ class _TodayAttendancePageState extends State<TodayAttendancePage> {
     loadToday();
   }
 
+  // Loads all attendance submissions recorded for today
   Future loadToday() async {
     final data = await AttendanceService.getTodayAttendance();
 
@@ -39,7 +40,7 @@ class _TodayAttendancePageState extends State<TodayAttendancePage> {
     });
   }
 
-  // 🔥 REJECT
+  // Admin action: marks a student absent/rejected and sends them a notification
   Future reject(Map student) async {
 
     await AttendanceService.markAbsent(
@@ -53,6 +54,7 @@ class _TodayAttendancePageState extends State<TodayAttendancePage> {
       message: "Your attendance for today was rejected",
     );
 
+    // Refresh list of today's attendance
     await loadToday();
   }
 

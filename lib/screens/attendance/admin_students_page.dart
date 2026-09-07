@@ -45,6 +45,7 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
     });
   }
 
+  // Reads all users and filters them to only those belonging to the selected year and branch
   Future loadStudents() async {
     final prefs = await SharedPreferences.getInstance();
     final users = prefs.getStringList("users") ?? [];
@@ -58,6 +59,7 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
       final userYear = prefs.getString("year_$username");
       final userBranch = prefs.getString("branch_$username");
 
+      // Match against widget.year and widget.branch
       if (userYear == widget.year &&
           userBranch == widget.branch) {
 
@@ -79,6 +81,7 @@ class _AdminStudentsPageState extends State<AdminStudentsPage> {
     });
   }
 
+  // Live filter students by display name, username, or enrollment number
   void filterStudents() {
     final query = searchController.text.toLowerCase();
 

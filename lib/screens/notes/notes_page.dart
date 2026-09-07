@@ -3,10 +3,10 @@ import 'package:college_app/screens/notes/branch_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:college_app/screens/notes/admin_notes_page.dart';
 
+// Notes section entry screen: allows selecting academic year (1st to 4th year)
 class NotesPage extends StatelessWidget {
   const NotesPage({super.key});
 
-  // 🔵 HEADER (same as before)
   Widget buildHeader(BuildContext context, String title) {
     return Container(
       width: double.infinity,
@@ -38,7 +38,7 @@ class NotesPage extends StatelessWidget {
             ),
           ),
 
-          // 🔥 ADMIN BUTTON
+          // Show Admin Panel shortcut icon only for admin and root users
           FutureBuilder(
             future: SharedPreferences.getInstance(),
             builder: (context, snapshot) {
@@ -52,6 +52,7 @@ class NotesPage extends StatelessWidget {
                   icon: const Icon(Icons.admin_panel_settings,
                       color: Colors.white),
                   onPressed: () {
+                    // Navigate to pending notes review screen
                     Navigator.push(
                       context,
                       MaterialPageRoute(

@@ -67,6 +67,7 @@ class SubjectsPage extends StatelessWidget {
 
           buildHeader(context, "$branch - $year Year"),
 
+          // Builds list of academic subjects based on branch and year
           Expanded(
             child: subjects.isEmpty
                 ? const Center(child: Text("No data available"))
@@ -79,14 +80,15 @@ class SubjectsPage extends StatelessWidget {
 
                 return GestureDetector(
                   onTap: () {
+                    // Navigate to the notes list for the selected subject
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
                             NotesListPage(
                               subject: subjects[index],
-                              year: year,       // ✅ FIX
-                              branch: branch,   // ✅ FIX
+                              year: year,
+                              branch: branch,
                             ),
                       ),
                     );

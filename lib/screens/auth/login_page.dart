@@ -22,23 +22,21 @@ class _LoginPageState extends State<LoginPage> {
   bool obscurePassword = true;
   bool loginAsAdmin = false;
 
-  // ONLY CHANGE: inside login() function
-
+  // Handles user authentication, root bypass, role resolution, and session saving
   Future<void> login() async {
     final prefs = await SharedPreferences.getInstance();
 
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
 
-    // ROOT LOGIN
+    // 1. Hardcoded Root Super-Admin Login check
     if (username == "Axite7" && password == "Axite@717") {
       await prefs.setString("currentUser", username);
       await prefs.setString("role", "root");
-
-      // ✅ FIX
       await prefs.setBool("isLoggedIn", true);
 
       if (!mounted) return;
+      // Navigate to HomeScreen and replace login page in the route stack
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -48,12 +46,14 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    // 2. Fetch saved registered users from SharedPreferences
     final usersData = prefs.getStringList("users") ?? [];
 
     final users = usersData
         .map((e) => UserModel.fromJson(jsonDecode(e)))
         .toList();
 
+    // 3. Match username and password against registered users
     final user = users.where((u) =>
     u.username == username && u.password == password);
 
@@ -62,17 +62,18 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    // 4. Resolve user role (checks root and approvedAdmins list)
     String role = await UserRole.getRole(username);
 
+    // 5. If user checked "Login as Admin" but is a regular user, trigger an admin request
     if (loginAsAdmin && role == "user") {
       await UserRole.requestAdmin(username);
       _showMessage("Admin request sent");
     }
 
+    // 6. Save active session data to SharedPreferences
     await prefs.setString("currentUser", username);
     await prefs.setString("role", role);
-
-    // ✅ FIX
     await prefs.setBool("isLoggedIn", true);
 
     if (!mounted) return;

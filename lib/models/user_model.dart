@@ -1,3 +1,4 @@
+// Represents a user account in the application
 class UserModel {
   final String username;
   final String password;
@@ -16,6 +17,7 @@ class UserModel {
     Map<String, dynamic>? attendance,
   }) : attendance = attendance ?? {};
 
+  // Converts the user model into a Map for JSON encoding into SharedPreferences
   Map<String, dynamic> toJson() {
     return {
       "username": username,
@@ -27,6 +29,7 @@ class UserModel {
     };
   }
 
+  // Creates a UserModel instance from a JSON map loaded from storage
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       username: json["username"],

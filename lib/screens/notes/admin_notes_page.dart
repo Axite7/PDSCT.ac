@@ -21,6 +21,7 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
     loadData();
   }
 
+  // Loads student-submitted pending notes awaiting administrator approval
   Future<void> loadData() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -30,6 +31,7 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
     setState(() {});
   }
 
+  // Moves the note from pendingNotes to approvedNotes and notifies the student who uploaded it
   Future<void> approve(int index) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -42,22 +44,25 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
 
     final note = pendingList[index];
 
+    // Add note to approved list and remove from pending queue
     approvedList.add(note);
     pendingList.removeAt(index);
 
     await prefs.setString("approvedNotes", jsonEncode(approvedList));
     await prefs.setString("pendingNotes", jsonEncode(pendingList));
 
-    // 🔥 USER NOTIFICATION
+    // Send approval notification to the uploader
     await NotificationService.addNotification(
       username: note["uploadedBy"],
       title: "Note Approved",
       message: "${note["title"]} approved by admin",
     );
 
+    // Refresh pending notes list
     await loadData();
   }
 
+  // Rejects the note: removes it from pendingNotes and notifies the student
   Future<void> reject(int index) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -70,7 +75,7 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
 
     await prefs.setString("pendingNotes", jsonEncode(pendingList));
 
-    // 🔥 USER NOTIFICATION
+    // Send rejection notification to the uploader
     await NotificationService.addNotification(
       username: note["uploadedBy"],
       title: "Note Rejected",
@@ -80,6 +85,7 @@ class _AdminNotesPageState extends State<AdminNotesPage> {
     await loadData();
   }
 
+  // Opens the local PDF for preview before approval
   void openFile(String path) async {
     await OpenFilex.open(path);
   }

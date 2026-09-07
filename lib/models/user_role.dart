@@ -2,36 +2,37 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:college_app/services/notification_service.dart';
 
-/// Handles role management for users:
-/// - Root user
-/// - Admin approvals
-/// - Admin requests
+/// Manages user roles and permission checks:
+/// - "root": Super-admin with full privileges (hardcoded as "Axite7")
+/// - "admin": Approved administrators who can manage notes, events, and attendance
+/// - "user": Regular student account
 class UserRole {
   static const String _rootUsername = "Axite7";
 
-  /// Returns role of a user: root / admin / user
+  /// Checks the role for a given username ("root", "admin", or "user")
   static Future<String> getRole(String username) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Root user check
+    // 1. Check if username matches hardcoded root administrator
     if (username == _rootUsername) {
       return "root";
     }
 
-    // Fetch approved admins list
+    // 2. Read approved admins list from SharedPreferences
     final approvedData = prefs.getString("approvedAdmins");
     final List approvedList =
     approvedData != null ? jsonDecode(approvedData) : [];
 
-    // Check if user is approved admin
+    // 3. If username is in approved list, grant admin role
     if (approvedList.contains(username)) {
       return "admin";
     }
 
+    // 4. Default fallback role
     return "user";
   }
 
-  /// Sends admin access request
+  /// Submits an admin access request and notifies the root admin
   static Future<void> requestAdmin(String username) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -39,7 +40,7 @@ class UserRole {
     final List requests =
     data != null ? jsonDecode(data) : [];
 
-    // Avoid duplicate requests
+    // Avoid duplicate pending requests for the same user
     final alreadyRequested =
     requests.any((r) => r["username"] == username);
 
@@ -55,18 +56,20 @@ class UserRole {
         jsonEncode(requests),
       );
     }
+
+    // Send a notification directly to the root user
     await NotificationService.addNotification(
-      username: "Axite7", // 🔥 root ko
+      username: "Axite7",
       title: "New Admin Request",
       message: "$username requested admin access",
     );
   }
 
-  /// Approves admin request (used by root)
+  /// Approves an admin request: adds username to approvedAdmins list (used by root)
   static Future<void> approveAdmin(String username) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Update approved admins
+    // Add to approved admins list in SharedPreferences
     final approvedData = prefs.getString("approvedAdmins");
     final List approvedList =
     approvedData != null ? jsonDecode(approvedData) : [];
@@ -80,16 +83,16 @@ class UserRole {
       jsonEncode(approvedList),
     );
 
-    // Update request status
+    // Update request entry status to "approved"
     await _updateRequestStatus(username, "approved");
   }
 
-  /// Rejects admin request (used by root)
+  /// Rejects an admin request by updating its status to "rejected" (used by root)
   static Future<void> rejectAdmin(String username) async {
     await _updateRequestStatus(username, "rejected");
   }
 
-  /// Internal helper to update request status
+  /// Helper to update the status of a request in the "adminRequests" list
   static Future<void> _updateRequestStatus(
       String username, String status) async {
     final prefs = await SharedPreferences.getInstance();

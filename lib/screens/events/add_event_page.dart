@@ -20,6 +20,7 @@ class _AddEventPageState extends State<AddEventPage> {
 
   File? image;
 
+  // Lets the administrator pick an event poster image from the gallery
   Future pickImage() async {
     final picked =
     await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -31,6 +32,7 @@ class _AddEventPageState extends State<AddEventPage> {
     }
   }
 
+  // Validates form fields, appends new Event to list, saves to storage, and notifies all users
   void saveEvent() async {
     if (titleController.text.isEmpty ||
         dateController.text.isEmpty ||
@@ -41,6 +43,7 @@ class _AddEventPageState extends State<AddEventPage> {
 
     final title = titleController.text;
 
+    // Add new event to the in-memory list
     events.add(Event(
       title: title,
       date: dateController.text,
@@ -48,9 +51,10 @@ class _AddEventPageState extends State<AddEventPage> {
       image: image!.path,
     ));
 
+    // Save all events to SharedPreferences
     await saveEvents();
 
-    // ✅ Notification added
+    // Broadcast a notification to all registered users
     await NotificationService.addNotification(
       username: "all",
       title: "New Event Added",

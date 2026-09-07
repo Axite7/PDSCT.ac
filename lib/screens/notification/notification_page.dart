@@ -25,24 +25,27 @@ class _NotificationPageState extends State<NotificationPage> {
     loadData();
   }
 
-  // 🔥 ONLY CHANGE: loadData FIX
+  // Loads notifications for the current user and admin requests for root, then marks all notifications as read
   Future loadData() async {
     final prefs = await SharedPreferences.getInstance();
 
     username = prefs.getString("currentUser") ?? "";
     role = await UserRole.getRole(username);
 
+    // Fetch user-specific notifications
     notifications = await NotificationService.getNotifications(username);
 
+    // Fetch admin access requests (visible to root)
     final data = prefs.getString("adminRequests");
     requests = data != null ? jsonDecode(data) : [];
 
-    // 🔥 SAFE MARK READ
+    // Mark current user's notifications as read
     await NotificationService.markAllRead(username);
 
     setState(() {});
   }
 
+  // Root action: approves a user's admin request and sends them a notification
   Future approve(String username) async {
     await UserRole.approveAdmin(username);
 
@@ -55,6 +58,7 @@ class _NotificationPageState extends State<NotificationPage> {
     await loadData();
   }
 
+  // Root action: rejects a user's admin request and sends them a notification
   Future reject(String username) async {
     await UserRole.rejectAdmin(username);
 
@@ -67,6 +71,7 @@ class _NotificationPageState extends State<NotificationPage> {
     await loadData();
   }
 
+  // Root action: revokes admin access from a user and updates status to "removed"
   Future removeAdmin(String user) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -76,7 +81,7 @@ class _NotificationPageState extends State<NotificationPage> {
 
     await prefs.setString("approvedAdmins", jsonEncode(admins));
 
-    // 🔥 request status update
+    // Update request entry status to "removed"
     final reqData = prefs.getString("adminRequests");
     List reqs = reqData != null ? jsonDecode(reqData) : [];
 

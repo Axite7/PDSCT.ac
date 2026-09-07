@@ -49,6 +49,7 @@ class _NotesListPageState extends State<NotesListPage> {
     loadData();
   }
 
+  // Loads approved notes from SharedPreferences and filters them by subject, year, and branch
   Future loadData() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -56,7 +57,7 @@ class _NotesListPageState extends State<NotesListPage> {
     List allNotes = approved != null ? jsonDecode(approved) : [];
 
     setState(() {
-      // 🔥 FILTER FIX (NOW CORRECT)
+      // Filter to only approved notes matching this subject, academic year, and branch
       approvedNotes = allNotes.where((n) =>
       n["subject"] == widget.subject &&
           n["year"] == widget.year &&
@@ -68,6 +69,9 @@ class _NotesListPageState extends State<NotesListPage> {
     });
   }
 
+  // File picker for uploading PDF notes:
+  // - Admins/Root: Upload directly into approvedNotes and notify root
+  // - Students: Upload to pendingNotes for admin review and notify student
   Future<void> pickPDF() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -90,6 +94,7 @@ class _NotesListPageState extends State<NotesListPage> {
       };
 
       if (role == "admin" || role == "root") {
+        // Direct approval for admins
         final approvedData = prefs.getString("approvedNotes");
         List approved =
         approvedData != null ? jsonDecode(approvedData) : [];
@@ -103,11 +108,12 @@ class _NotesListPageState extends State<NotesListPage> {
           const SnackBar(content: Text("Note added")),
         );
         await NotificationService.addNotification(
-          username: "root", // 🔥 admin/root ko notify
+          username: "root",
           title: "New Note Uploaded",
           message: "$username uploaded ${widget.subject} notes",
         );
       } else {
+        // Submit to pending approval queue for regular students
         final data = prefs.getString("pendingNotes");
         List pending = data != null ? jsonDecode(data) : [];
 
@@ -119,7 +125,7 @@ class _NotesListPageState extends State<NotesListPage> {
           const SnackBar(content: Text("Sent for approval")),
         );
         await NotificationService.addNotification(
-          username: username, // 🔥 USER ko bhi
+          username: username,
           title: "Note Submitted",
           message: "Your ${widget.subject} notes sent for approval",
         );
@@ -127,10 +133,12 @@ class _NotesListPageState extends State<NotesListPage> {
     }
   }
 
+  // Opens a local PDF file using the default system PDF viewer
   void openPDF(String path) async {
     await OpenFilex.open(path);
   }
 
+  // Admin action: deletes an approved note from SharedPreferences
   Future deleteNote(int index) async {
     if (role != "admin" && role != "root") return;
 
@@ -148,6 +156,7 @@ class _NotesListPageState extends State<NotesListPage> {
     loadData();
   }
 
+  // Removes a dummy sample note from the local UI list
   void deleteDummy(int index) {
     if (role != "admin" && role != "root") return;
 

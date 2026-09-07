@@ -41,19 +41,21 @@ class _StudentAttendanceDetailPageState
     loadAttendance();
   }
 
+  // Loads student profile information (name, enrollment, branch, year, avatar) from SharedPreferences
   Future loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
     final u = widget.username;
 
     setState(() {
       displayName = prefs.getString("displayName_$u") ?? u;
-      roll = prefs.getString("enrollment_$u") ?? ""; // 🔥 FIXED
+      roll = prefs.getString("enrollment_$u") ?? "";
       branch = prefs.getString("branch_$u") ?? "";
       year = prefs.getString("year_$u") ?? "";
       imagePath = prefs.getString("profilePic_$u");
     });
   }
 
+  // Fetches attendance records for this student and maps dates to status ("present" / "rejected")
   Future loadAttendance() async {
     final data =
     await AttendanceService.getUserAttendance(widget.username);
@@ -70,7 +72,7 @@ class _StudentAttendanceDetailPageState
     });
   }
 
-  // 🔥 CONFIRM REJECT
+  // Shows confirmation dialog to let admins mark a student absent for a tapped present day
   Future rejectAttendance(DateTime day) async {
 
     showDialog(
@@ -89,11 +91,13 @@ class _StudentAttendanceDetailPageState
 
               final date = norm(day).toIso8601String();
 
+              // Mark status as rejected in SharedPreferences
               await AttendanceService.markAbsent(
                 username: widget.username,
                 date: date,
               );
 
+              // Notify student of rejection
               await NotificationService.addNotification(
                 username: widget.username,
                 title: "Attendance Rejected",
@@ -101,6 +105,7 @@ class _StudentAttendanceDetailPageState
                 "Your attendance on ${day.day}-${day.month}-${day.year} was rejected",
               );
 
+              // Refresh calendar UI
               await loadAttendance();
             },
             child: const Text("Reject"),

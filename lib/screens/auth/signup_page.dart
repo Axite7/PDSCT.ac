@@ -22,6 +22,7 @@ class _SignupPageState extends State<SignupPage> {
   bool obscurePassword = true;
   File? image;
 
+  // Opens the gallery to let the user select a profile picture
   Future<void> pickImage() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked != null) {
@@ -31,6 +32,7 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
+  // Validates input, checks for existing usernames, and saves the new user to SharedPreferences
   Future<void> signup() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -38,11 +40,13 @@ class _SignupPageState extends State<SignupPage> {
     final password = passwordController.text.trim();
     final displayName = displayNameController.text.trim();
 
+    // 1. Basic validation
     if (username.isEmpty || password.isEmpty) {
       _showMessage("Username and password are required");
       return;
     }
 
+    // 2. Fetch existing users to prevent duplicate usernames
     final usersData = prefs.getStringList("users") ?? [];
 
     final users = usersData
@@ -54,6 +58,7 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
+    // 3. Add new user and save updated user list as JSON strings
     users.add(UserModel(username: username, password: password));
 
     await prefs.setStringList(
@@ -61,6 +66,7 @@ class _SignupPageState extends State<SignupPage> {
       users.map((u) => jsonEncode(u.toJson())).toList(),
     );
 
+    // 4. Save display name and profile picture path if provided
     if (displayName.isNotEmpty) {
       await prefs.setString("displayName_$username", displayName);
     }
@@ -71,6 +77,7 @@ class _SignupPageState extends State<SignupPage> {
 
     if (!mounted) return;
     _showMessage("Account created successfully");
+    // Return to LoginPage
     Navigator.pop(context);
   }
 

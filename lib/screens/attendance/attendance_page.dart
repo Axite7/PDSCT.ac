@@ -36,6 +36,7 @@ class _AttendancePageState extends State<AttendancePage> {
     loadRole();
   }
 
+  // Fetches the user's role to conditionally show admin tools (e.g. View Today's Attendance)
   Future loadRole() async {
     final r = await UserRole.getRole(widget.username);
 
@@ -49,6 +50,7 @@ class _AttendancePageState extends State<AttendancePage> {
     });
   }
 
+  // Loads attendance records for this student and maps each date to its status ("present" / "rejected")
   Future loadAttendance() async {
     final data =
     await AttendanceService.getUserAttendance(widget.username);
@@ -65,7 +67,7 @@ class _AttendancePageState extends State<AttendancePage> {
     });
   }
 
-  // 🔥 LOCATION
+  // Requests GPS permissions and returns latitude,longitude string
   Future<String> getLocation() async {
 
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -89,11 +91,12 @@ class _AttendancePageState extends State<AttendancePage> {
     return "${pos.latitude},${pos.longitude}";
   }
 
-  // 🔥 MARK ATTENDANCE
+  // Validates current date, captures camera selfie, gets GPS, and saves attendance
   Future markAttendance() async {
 
     final today = norm(DateTime.now());
 
+    // Only allow marking attendance for the current calendar day
     if (norm(selectedDay) != today) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Only today's attendance allowed")),
@@ -101,12 +104,15 @@ class _AttendancePageState extends State<AttendancePage> {
       return;
     }
 
+    // Capture camera selfie
     final image =
     await ImagePicker().pickImage(source: ImageSource.camera);
     if (image == null) return;
 
+    // Fetch GPS coordinates
     final location = await getLocation();
 
+    // Save attendance entry through AttendanceService
     await AttendanceService.markAttendance(
       username: widget.username,
       date: today.toIso8601String(),
@@ -114,7 +120,7 @@ class _AttendancePageState extends State<AttendancePage> {
       location: location,
     );
 
-    // 🔥 ADD TIME MANUALLY
+    // Save current formatted time into the record in SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
 
@@ -138,6 +144,7 @@ class _AttendancePageState extends State<AttendancePage> {
     all[userKey] = list;
     await prefs.setString("attendance_data", jsonEncode(all));
 
+    // Refresh local calendar map
     await loadAttendance();
 
     if (!mounted) return;

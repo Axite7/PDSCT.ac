@@ -1,8 +1,10 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
+/// Manages local user notifications stored in SharedPreferences
 class NotificationService {
 
+  // Adds a notification for a specific user or broadcasts to "all" registered users
   static Future<void> addNotification({
     required String username,
     required String title,
@@ -12,6 +14,7 @@ class NotificationService {
 
     List<String> targets = [];
 
+    // If username is "all", target every registered user plus the root admin
     if (username == "all") {
       final users = prefs.getStringList("users") ?? [];
 
@@ -20,16 +23,16 @@ class NotificationService {
         return u["username"].toString();
       }).toList();
 
-      // 🔥 root add
       if (!targets.contains("Axite7")) {
         targets.add("Axite7");
       }
 
     } else {
-      // 🔥 THIS WAS MISSING (main bug)
+      // Direct notification for a single recipient
       targets = [username];
     }
 
+    // Prepend notification to each recipient's notification list in SharedPreferences
     for (String user in targets) {
       final key = "notifications_$user";
 
@@ -47,6 +50,7 @@ class NotificationService {
     }
   }
 
+  // Retrieves all notifications for a specific user
   static Future<List> getNotifications(String username) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -54,6 +58,7 @@ class NotificationService {
     return data != null ? jsonDecode(data) : [];
   }
 
+  // Deletes a notification at a given index from the user's notification list
   static Future<void> removeNotification(String username, int index) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -68,6 +73,7 @@ class NotificationService {
     }
   }
 
+  // Marks all notifications as read for a given user
   static Future<void> markAllRead(String username) async {
     final prefs = await SharedPreferences.getInstance();
 

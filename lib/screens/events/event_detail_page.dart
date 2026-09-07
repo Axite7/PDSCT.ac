@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:college_app/screens/events/event_model.dart';
 import 'dart:io';
 
+// Displays detailed information, poster image, date, and description for a selected event
 class EventDetailPage extends StatelessWidget {
   final Event event;
 

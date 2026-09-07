@@ -1,3 +1,4 @@
+// Represents a college event with its details and poster image path
 class Event {
   final String title;
   final String date;
@@ -11,7 +12,7 @@ class Event {
     required this.image,
   });
 
-  // 🔥 TO JSON
+  // Converts an Event object into a Map for JSON storage in SharedPreferences
   Map<String, dynamic> toJson() {
     return {
       "title": title,
@@ -21,7 +22,7 @@ class Event {
     };
   }
 
-  // 🔥 FROM JSON
+  // Creates an Event instance from decoded JSON map
   factory Event.fromJson(Map<String, dynamic> json) {
     return Event(
       title: json["title"],

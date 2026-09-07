@@ -17,24 +17,34 @@ class TimetableDetailPage extends StatefulWidget {
   });
 
   @override
-  State<TimetableDetailPage> createState() =>
-      _TimetableDetailPageState();
+  State<TimetableDetailPage> createState() => _TimetableDetailPageState();
 }
 
-class _TimetableDetailPageState
-    extends State<TimetableDetailPage> {
+class _TimetableDetailPageState extends State<TimetableDetailPage> {
+  String role = "user";
+
+  // Fetches current role to determine whether to display Upload and Delete buttons
+  Future<void> loadRole() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      role = prefs.getString("role") ?? "user";
+    });
+  }
 
   File? file;
 
-  String get keyName =>
-      "file_${widget.semester}_${widget.type}";
+  // Key used to store this semester & timetable type's local file path in SharedPreferences
+  String get keyName => "file_${widget.semester}_${widget.type}";
 
   @override
   void initState() {
     super.initState();
     loadFile();
+    loadRole();
   }
 
+  // Reads the saved file path from SharedPreferences and verifies the file exists on disk
   Future<void> loadFile() async {
     final prefs = await SharedPreferences.getInstance();
     final path = prefs.getString(keyName);
@@ -49,6 +59,7 @@ class _TimetableDetailPageState
     }
   }
 
+  // Admin action: lets user pick a PDF or image, copies it to local app storage, and saves its path in SharedPreferences
   Future<void> pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -62,6 +73,7 @@ class _TimetableDetailPageState
 
     final pickedFile = File(originalPath);
 
+    // Copy the picked file to the application's persistent documents directory
     final dir = await getApplicationDocumentsDirectory();
 
     final fileName =
@@ -69,6 +81,7 @@ class _TimetableDetailPageState
 
     final newFile = await pickedFile.copy("${dir.path}/$fileName");
 
+    // Save file path into SharedPreferences under keyName
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(keyName, newFile.path);
 
@@ -77,6 +90,7 @@ class _TimetableDetailPageState
     });
   }
 
+  // Admin action: deletes the local file from disk and removes the key from SharedPreferences
   Future<void> deleteFile() async {
     if (file != null && await file!.exists()) {
       await file!.delete();
@@ -90,6 +104,7 @@ class _TimetableDetailPageState
     });
   }
 
+  // Shares the timetable file using the system share sheet
   void shareFile() {
     if (file != null) {
       Share.shareXFiles([XFile(file!.path)]);
@@ -105,13 +120,10 @@ class _TimetableDetailPageState
         gradient: LinearGradient(
           colors: [Color(0xFF4A6CF7), Color(0xFF6A8DFF)],
         ),
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(30),
-        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
       ),
       child: Row(
         children: [
-
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -134,11 +146,11 @@ class _TimetableDetailPageState
             onPressed: shareFile,
             icon: const Icon(Icons.share, color: Colors.white),
           ),
-
-          IconButton(
-            onPressed: deleteFile,
-            icon: const Icon(Icons.delete, color: Colors.white),
-          ),
+          if (role == "admin" || role == "root")
+            IconButton(
+              onPressed: deleteFile,
+              icon: const Icon(Icons.delete, color: Colors.white),
+            ),
         ],
       ),
     );
@@ -146,20 +158,14 @@ class _TimetableDetailPageState
 
   Widget viewer() {
     if (file == null) {
-      return const Center(
-        child: Text("No file uploaded"),
-      );
+      return const Center(child: Text("No file uploaded"));
     }
 
     if (file!.path.endsWith(".pdf")) {
-      return PDFView(
-        filePath: file!.path,
-      );
+      return PDFView(filePath: file!.path);
     }
 
-    return InteractiveViewer(
-      child: Image.file(file!),
-    );
+    return InteractiveViewer(child: Image.file(file!));
   }
 
   @override
@@ -169,28 +175,27 @@ class _TimetableDetailPageState
 
       body: Column(
         children: [
-
           buildHeader(),
 
           Expanded(child: viewer()),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A6CF7),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: pickFile,
-                child: const Text(
-                  "Upload Timetable",
-                  style: TextStyle(color: Colors.white),
+          if (role == "admin" || role == "root")
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4A6CF7),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: pickFile,
+                  child: const Text(
+                    "Upload Timetable",
+                    style: TextStyle(color: Colors.white),
+                  ),
                 ),
               ),
             ),
-          )
         ],
       ),
     );

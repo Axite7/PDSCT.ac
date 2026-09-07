@@ -8,7 +8,7 @@ import 'package:college_app/screens/profile/profile_page.dart';
 import 'package:college_app/screens/events/events_page.dart';
 import 'package:college_app/screens/notes/notes_page.dart';
 import 'package:college_app/screens/attendance/attendance_page.dart';
-import 'package:college_app/screens/timetable/timetable_page.dart';
+import 'package:college_app/screens/timetable/semester_page.dart';
 import 'package:college_app/models/user_role.dart';
 import 'package:college_app/screens/attendance/admin_attendance_year_page.dart';
 
@@ -51,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // Loads profile info (display name and avatar path) from SharedPreferences
   Future<void> loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -71,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
+  // Counts unread notifications to display the badge on the bell icon
   Future<void> loadNotificationCount() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -263,6 +265,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  // Dashboard navigation cards with role-aware routing for Attendance
   Widget buildCard(BuildContext context, String title, String subtitle,
       IconData icon, Color color) {
     return GestureDetector(
@@ -281,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen>
           );
 
         } else if (title == "Attendance") {
-
+          // Check role: Admins/Root see the class-level Attendance management, while Students see their own calendar
           final role = await UserRole.getRole(username);
 
           if (!context.mounted) return;
@@ -304,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen>
         } else if (title == "Timetable") {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const TimetablePage()),
+            MaterialPageRoute(builder: (_) => const SemesterPage()),
           );
         }
       },

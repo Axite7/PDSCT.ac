@@ -45,24 +45,23 @@ class BranchPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
 
-    // 🔥 UPDATED BRANCHES (WITH EE)
+    // Engineering branches available in the college
     final branches = [
       {"short": "CSE", "full": "Computer Science Engineering"},
       {"short": "IT", "full": "Information Technology"},
       {"short": "ME", "full": "Mechanical Engineering"},
       {"short": "CE", "full": "Civil Engineering"},
       {"short": "EC", "full": "Electronics & Communication"},
-      {"short": "EE", "full": "Electrical Engineering"}, // 🔥 NEW
+      {"short": "EE", "full": "Electrical Engineering"},
     ];
 
-    // 🔥 COLOR SYSTEM (MATCH YOUR UI)
     final colors = [
       Colors.blue,
       Colors.green,
       Colors.red,
       Colors.orange,
       Colors.deepPurple,
-      Colors.teal, // 🔥 EE color
+      Colors.teal,
     ];
 
     return Scaffold(
@@ -73,6 +72,7 @@ class BranchPage extends StatelessWidget {
 
           buildHeader(context, "$year Year"),
 
+          // List branches for student to tap and view corresponding subjects
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -84,11 +84,12 @@ class BranchPage extends StatelessWidget {
 
                 return GestureDetector(
                   onTap: () {
+                    // Navigate to subjects list passing the short branch code (e.g. "CSE") and year
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => SubjectsPage(
-                          branch: branch["short"]!, // 🔥 IMPORTANT
+                          branch: branch["short"]!,
                           year: year,
                         ),
                       ),

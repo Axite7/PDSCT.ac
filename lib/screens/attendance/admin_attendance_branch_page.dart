@@ -69,6 +69,7 @@ class AdminAttendanceBranchPage extends StatelessWidget {
 
           header(context),
 
+          // Lists engineering branches for the selected academic year
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -80,12 +81,13 @@ class AdminAttendanceBranchPage extends StatelessWidget {
 
                 return GestureDetector(
                   onTap: () {
+                    // Navigate to the list of students for this specific year & branch
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => AdminStudentsPage(
                           year: year,
-                          branch: branch["short"]!, // 🔥 important
+                          branch: branch["short"]!,
                         ),
                       ),
                     );

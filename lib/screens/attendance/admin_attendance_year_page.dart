@@ -58,7 +58,7 @@ class AdminAttendanceYearPage extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // 🔥 NEW BUTTON (IMPORTANT)
+          // Shortcut button allowing admins to immediately view today's submissions
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: GestureDetector(
@@ -105,6 +105,7 @@ class AdminAttendanceYearPage extends StatelessWidget {
             ),
           ),
 
+          // Lists 1st to 4th Year for attendance filtering
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -115,6 +116,7 @@ class AdminAttendanceYearPage extends StatelessWidget {
 
                 return GestureDetector(
                   onTap: () {
+                    // Navigate to Branch selection for the chosen year
                     Navigator.push(
                       context,
                       MaterialPageRoute(

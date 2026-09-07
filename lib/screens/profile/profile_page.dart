@@ -64,6 +64,7 @@ class _ProfilePageState extends State<ProfilePage> {
     loadProfile();
   }
 
+  // Loads user profile fields and avatar path from SharedPreferences
   Future loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
     String user = widget.username;
@@ -83,7 +84,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       age.text = prefs.getString("age_$user") ?? "";
 
-      // 🔥 SAFE LOAD (CRASH FIX)
+      // Validate dropdown values against allowable items to prevent assertion crashes
       selectedYear = years.contains(savedYear) ? savedYear : null;
       selectedBranch = branchMap.containsKey(savedBranch)
           ? savedBranch
@@ -97,6 +98,7 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  // Opens image picker to select a new profile avatar from the device gallery
   Future pickImage() async {
     final img = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (img == null) return;
@@ -106,6 +108,7 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  // Persists edited profile information into SharedPreferences
   Future saveProfile() async {
     final prefs = await SharedPreferences.getInstance();
     String user = widget.username;
@@ -114,7 +117,7 @@ class _ProfilePageState extends State<ProfilePage> {
     await prefs.setString("enrollment_$user", enrollment.text);
     await prefs.setString("age_$user", age.text);
 
-    // 🔥 STANDARDIZED SAVE
+    // Save standardized academic details
     await prefs.setString("year_$user", selectedYear ?? "");
     await prefs.setString("branch_$user", selectedBranch ?? "");
     await prefs.setString(
@@ -135,6 +138,7 @@ class _ProfilePageState extends State<ProfilePage> {
         .showSnackBar(const SnackBar(content: Text("Profile Saved")));
   }
 
+  // Validates old password and updates the user's password in the 'users' list in SharedPreferences
   Future changePassword() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -161,11 +165,13 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
 
+    // Update password in UserModel
     users[index] = UserModel(
       username: users[index].username,
       password: newPass.text.trim(),
     );
 
+    // Save updated users list back to SharedPreferences
     await prefs.setStringList(
       "users",
       users.map((u) => jsonEncode(u.toJson())).toList(),
@@ -178,6 +184,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _msg("Password updated successfully");
   }
 
+  // Clears active login session in SharedPreferences and routes back to LoginPage
   Future logout() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -186,6 +193,7 @@ class _ProfilePageState extends State<ProfilePage> {
     await prefs.remove("role");
 
     if (!mounted) return;
+    // Remove all previous navigation routes so the user cannot back-navigate
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginPage()),
